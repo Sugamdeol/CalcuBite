@@ -1,0 +1,317 @@
+// Analyze image with AI - updated to handle both food and label analysis
+async function analyzeImage(base64Image) {
+  let systemPrompt;
+  
+  if (currentMode === 'label') {
+    systemPrompt = `You are an advanced nutrition and food safety expert. Analyze the ingredients list and provide:
+1. A health rating from 1-10
+2. A detailed breakdown of concerning ingredients with specific health impacts
+3. Comprehensive health insights and recommendations
+4. Alternative suggestions for healthier options
+5. Long-term health implications
+6. Nutrition breakdown estimates
+
+Your response MUST be valid JSON with this structure:
+{
+  "rating": number,
+  "ratingExplanation": string,
+  "ingredients": {
+    "concerning": [
+      {
+        "name": string,
+        "risk": "high" | "medium" | "low",
+        "impact": string,
+        "whyAvoid": string
+      }
+    ],
+    "safe": [string]
+  },
+  "insights": [
+    {
+      "category": string,
+      "details": string,
+      "recommendation": string
+    }
+  ],
+  "healthImplications": {
+    "shortTerm": [string],
+    "longTerm": [string]
+  },
+  "alternatives": [string],
+  "nutritionEstimate": {
+    "calories": string,
+    "sugar": string,
+    "sodium": string,
+    "artificialContent": string
+  }
+}`;
+  } else {
+    systemPrompt = `You are an advanced nutrition and food science expert. Analyze the food in this image and provide:
+1. A health rating from 1-10
+2. Identification of the food items visible
+3. Estimated nutritional profile and caloric content
+4. Potential health benefits and concerns
+5. Dietary considerations (e.g., good for keto, vegan, etc.)
+6. Healthier preparation suggestions if applicable
+
+Your response MUST be valid JSON with this structure:
+{
+  "rating": number,
+  "ratingExplanation": string,
+  "foodIdentification": {
+    "mainItems": [string],
+    "ingredients": [string]
+  },
+  "ingredients": {
+    "concerning": [
+      {
+        "name": string,
+        "risk": "high" | "medium" | "low",
+        "impact": string,
+        "whyAvoid": string
+      }
+    ],
+    "beneficial": [
+      {
+        "name": string,
+        "benefits": string
+      }
+    ]
+  },
+  "insights": [
+    {
+      "category": string,
+      "details": string,
+      "recommendation": string
+    }
+  ],
+  "healthImplications": {
+    "shortTerm": [string],
+    "longTerm": [string]
+  },
+  "alternatives": [string],
+  "nutritionEstimate": {
+    "calories": string,
+    "protein": string,
+    "carbs": string,
+    "fat": string
+  },
+  "dietaryConsiderations": [string]
+}`;
+  }
+
+  try {
+    const response = await fetch('https://text.pollinations.ai/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messages: [{
+          role: "system",
+          content: systemPrompt
+        }, {
+          role: "user",
+          content: [{
+            type: "text",
+            text: currentMode === 'label' ? 
+              "Analyze this food label and provide detailed insights:" : 
+              "Analyze this food image and provide detailed nutritional insights:"
+          }, {
+            type: "image_url",
+            image_url: {
+              url: `data:image/jpeg;base64,${base64Image}`
+            }
+          }]
+        }],
+        model: "openai-large",
+        jsonMode: true
+      })
+    });
+    
+    // ... existing code ...
+  }
+}
+
+// Update displayResults function to handle both food and label analysis
+function displayResults(data) {
+  loadingDiv.style.display = 'none';
+  resultsDiv.style.display = 'block';
+  errorDiv.style.display = 'none';
+  
+  // Health Score
+  const healthScoreEl = document.getElementById('healthScore');
+  const rating = data.rating || 'N/A';
+  let ratingColor = rating >= 7 ? 'var(--success)' : (rating >= 4 ? 'var(--warning)' : 'var(--danger)');
+  let ratingIcon = rating >= 7 ? 'thumbs-up' : (rating >= 4 ? 'meh' : 'thumbs-down');
+  
+  healthScoreEl.innerHTML = `
+    <div class="health-score-container">
+      <div class="rating-circle" style="--rating: ${rating};">
+        <span style="font-size: 2.5rem; font-weight: 700; color: ${ratingColor};">${rating}</span>
+      </div>
+      <div style="flex: 1;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+          <i class="fas fa-${ratingIcon}" style="color: ${ratingColor}; font-size: 1.2rem;"></i>
+          <span style="font-weight: 600; color: ${ratingColor};">
+            ${rating >= 7 ? 'Good Choice' : (rating >= 4 ? 'Use with Caution' : 'Not Recommended')}
+          </span>
+        </div>
+        <div class="rating-explanation">${data.ratingExplanation || ''}</div>
+      </div>
+    </div>
+  `;
+  
+  // Nutrition Breakdown - handle both modes
+  const nutritionBreakdownEl = document.getElementById('nutritionBreakdown');
+  const nutrition = data.nutritionEstimate || {};
+  
+  if (currentMode === 'label') {
+    nutritionBreakdownEl.innerHTML = `
+      <div class="nutrition-item">
+        <small>Calories</small>
+        <div class="nutrition-value">${nutrition.calories || 'N/A'}</div>
+      </div>
+      <div class="nutrition-item">
+        <small>Sugar</small>
+        <div class="nutrition-value">${nutrition.sugar || 'N/A'}</div>
+      </div>
+      <div class="nutrition-item">
+        <small>Sodium</small>
+        <div class="nutrition-value">${nutrition.sodium || 'N/A'}</div>
+      </div>
+      <div class="nutrition-item">
+        <small>Artificial Content</small>
+        <div class="nutrition-value">${nutrition.artificialContent || 'N/A'}</div>
+      </div>
+    `;
+  } else {
+    nutritionBreakdownEl.innerHTML = `
+      <div class="nutrition-item">
+        <small>Calories</small>
+        <div class="nutrition-value">${nutrition.calories || 'N/A'}</div>
+      </div>
+      <div class="nutrition-item">
+        <small>Protein</small>
+        <div class="nutrition-value">${nutrition.protein || 'N/A'}</div>
+      </div>
+      <div class="nutrition-item">
+        <small>Carbs</small>
+        <div class="nutrition-value">${nutrition.carbs || 'N/A'}</div>
+      </div>
+      <div class="nutrition-item">
+        <small>Fat</small>
+        <div class="nutrition-value">${nutrition.fat || 'N/A'}</div>
+      </div>
+    `;
+  }
+  
+  // Ingredients Analysis - handle both modes
+  const ingredientsDiv = document.getElementById('ingredients');
+  
+  if (currentMode === 'label') {
+    if (data.ingredients?.concerning) {
+      ingredientsDiv.innerHTML = `
+        <div class="ingredients-warning">
+          ${data.ingredients.concerning.map(ing => `
+            <div class="ingredient-card ${ing.risk}-risk">
+              <div class="ingredient-header">
+                <i class="fas fa-${ing.risk === 'high' ? 'exclamation-triangle' : ing.risk === 'medium' ? 'exclamation-circle' : 'info-circle'}"
+                   style="color: ${ing.risk === 'high' ? 'var(--danger)' : ing.risk === 'medium' ? 'var(--warning)' : 'var(--primary)'}">
+                </i>
+                <h4>${ing.name}</h4>
+                <span class="badge badge-${ing.risk === 'high' ? 'danger' : ing.risk === 'medium' ? 'warning' : 'primary'}">
+                  ${ing.risk.toUpperCase()} RISK
+                </span>
+              </div>
+              <div class="ingredient-details">
+                <p><strong>Health Impact:</strong> ${ing.impact}</p>
+                <p><strong>Why Avoid:</strong> ${ing.whyAvoid}</p>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        ${data.ingredients.safe?.length > 0 ? `
+          <div class="safe-ingredients">
+            <h4><i class="fas fa-check-circle" style="color: var(--success);"></i> Safe Ingredients</h4>
+            <p>${data.ingredients.safe.join(', ')}</p>
+          </div>
+        ` : ''}
+      `;
+    } else {
+      ingredientsDiv.innerHTML = '<p>No ingredient information available</p>';
+    }
+  } else {
+    // Food mode - show food identification and beneficial ingredients
+    const foodItems = data.foodIdentification?.mainItems || [];
+    const ingredientsList = data.foodIdentification?.ingredients || [];
+    
+    ingredientsDiv.innerHTML = `
+      <div class="food-identification">
+        <h4><i class="fas fa-utensils" style="color: var(--primary);"></i> Food Identified</h4>
+        <p>${foodItems.join(', ') || 'No food items identified'}</p>
+        
+        ${ingredientsList.length > 0 ? `
+          <h4><i class="fas fa-list" style="color: var(--primary);"></i> Estimated Ingredients</h4>
+          <p>${ingredientsList.join(', ')}</p>
+        ` : ''}
+      </div>
+      
+      ${data.ingredients?.concerning ? `
+        <div class="ingredients-warning">
+          <h4><i class="fas fa-exclamation-circle" style="color: var(--warning);"></i> Health Concerns</h4>
+          ${data.ingredients.concerning.map(ing => `
+            <div class="ingredient-card ${ing.risk}-risk">
+              <div class="ingredient-header">
+                <i class="fas fa-${ing.risk === 'high' ? 'exclamation-triangle' : ing.risk === 'medium' ? 'exclamation-circle' : 'info-circle'}"
+                   style="color: ${ing.risk === 'high' ? 'var(--danger)' : ing.risk === 'medium' ? 'var(--warning)' : 'var(--primary)'}">
+                </i>
+                <h4>${ing.name}</h4>
+                <span class="badge badge-${ing.risk === 'high' ? 'danger' : ing.risk === 'medium' ? 'warning' : 'primary'}">
+                  ${ing.risk.toUpperCase()} RISK
+                </span>
+              </div>
+              <div class="ingredient-details">
+                <p><strong>Health Impact:</strong> ${ing.impact}</p>
+                <p><strong>Why Be Cautious:</strong> ${ing.whyAvoid}</p>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+      
+      ${data.ingredients?.beneficial?.length > 0 ? `
+        <div class="beneficial-ingredients">
+          <h4><i class="fas fa-heart" style="color: var(--success);"></i> Beneficial Components</h4>
+          ${data.ingredients.beneficial.map(ing => `
+            <div class="ingredient-card" style="border-left: 4px solid var(--success);">
+              <div class="ingredient-header">
+                <i class="fas fa-plus-circle" style="color: var(--success);"></i>
+                <h4>${ing.name}</h4>
+              </div>
+              <div class="ingredient-details">
+                <p><strong>Benefits:</strong> ${ing.benefits}</p>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+      
+      ${data.dietaryConsiderations?.length > 0 ? `
+        <div class="dietary-considerations">
+          <h4><i class="fas fa-clipboard-list" style="color: var(--primary);"></i> Dietary Considerations</h4>
+          <ul class="implication-list">
+            ${data.dietaryConsiderations.map(item => `
+              <li>
+                <i class="fas fa-check-circle" style="color: var(--success);"></i>
+                <span>${item}</span>
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+      ` : ''}
+    `;
+  }
+  
+  // ... rest of the existing displayResults function ...
+}
