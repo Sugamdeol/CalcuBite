@@ -11,6 +11,7 @@
         // Make supabaseClient available globally
         const supabaseClient = supabase;
     </script>
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
 </head>
 <body>
     <div id="auth-container" class="auth-container">
@@ -32,7 +33,7 @@
                 </div>
                 <div class="user-menu">
                     <div class="feature-badge" id="upgrade-badge">
-                        <i class="fas fa-crown"></i> <span id="user-tier">Free</span>
+                        <i class="fas fa-ad"></i> <span>Ad-Supported</span>
                     </div>
                     <div class="user-profile" id="user-profile">
                         <img src="https://ui-avatars.com/api/?name=User&background=random" alt="User" id="user-avatar">
@@ -51,19 +52,20 @@
                 </button>
             </div>
         </header>
-
+        <div class="ad-container" data-placement="header"></div>
+        
         <!-- Main Content -->
         <main class="main-content">
             <div class="container">
+                <!-- Ad container at the top of the content -->
+                <div class="ad-container" data-placement="in-content"></div>
+                
                 <!-- Premium features notification -->
                 <div id="premium-notification" class="premium-notification" style="display: none;">
-                    <i class="fas fa-lock"></i>
-                    <p>Some features are locked. Upgrade to Pro or watch an ad to unlock.</p>
+                    <i class="fas fa-ad"></i>
+                    <p>You've reached your scan limit. Watch an ad to get more scans!</p>
                     <button id="watch-ad-button" class="watch-ad-button">
-                        <i class="fas fa-play-circle"></i> Watch Ad to Unlock
-                    </button>
-                    <button id="upgrade-button" class="upgrade-button">
-                        <i class="fas fa-crown"></i> Upgrade to Pro
+                        <i class="fas fa-play-circle"></i> Watch Ad to Continue
                     </button>
                 </div>
                 
@@ -134,6 +136,7 @@
                     </section>
 
                     <!-- Results Panel -->
+                    <div class="ad-container" data-placement="results"></div>
                     <section class="results-panel" id="results">
                         <div class="panel-content">
                             <div class="panel-header">
@@ -257,9 +260,10 @@
         </main>
 
         <!-- Footer -->
+        <div class="ad-container" data-placement="footer"></div>
         <footer class="site-footer">
             <div class="container">
-                <p>&copy; 2023 NutriScan AI. Made with <i class="fas fa-heart"></i> by Sugam Deol</p>
+                <p>&copy; 2025 NutriScan AI. Made with <i class="fas fa-heart"></i> by Sugam Deol</p>
                 <p class="disclaimer">This application uses AI for analysis. Results should be used for informational purposes only.</p>
             </div>
         </footer>
@@ -310,6 +314,7 @@
                 
                 <div id="analytics-tab" class="admin-tab-content">
                     <h3>Analytics</h3>
+                    <!-- Export scan button will be added here via JavaScript -->
                     <div class="analytics-cards">
                         <div class="analytics-card">
                             <div class="analytics-icon">
@@ -322,11 +327,11 @@
                         </div>
                         <div class="analytics-card">
                             <div class="analytics-icon">
-                                <i class="fas fa-crown"></i>
+                                <i class="fas fa-user-clock"></i>
                             </div>
                             <div class="analytics-data">
-                                <h4>Pro Users</h4>
-                                <p id="pro-users">0</p>
+                                <h4>Daily Active Users</h4>
+                                <p id="daily-active-users">0</p>
                             </div>
                         </div>
                         <div class="analytics-card">
@@ -354,22 +359,36 @@
                     <div class="chart-container">
                         <canvas id="scans-chart"></canvas>
                     </div>
+                    <div class="chart-container">
+                        <canvas id="revenue-chart"></canvas>
+                        <!-- This is renamed to "Ads Watched" in the createAdWatchedChart function -->
+                    </div>
                 </div>
                 
                 <div id="ads-tab" class="admin-tab-content">
                     <h3>Ad Management</h3>
                     <div class="ad-controls">
+                        <!-- The placement-manager-button will be added here via JavaScript -->
                         <button id="add-ad-button" class="primary-button">
                             <i class="fas fa-plus"></i> Add New Ad
                         </button>
+                    </div>
+                    <div class="ad-settings">
+                        <div class="form-group">
+                            <label for="adsense-publisher-id">Google AdSense Publisher ID (Optional)</label>
+                            <input type="text" id="adsense-publisher-id" placeholder="ca-pub-XXXXXXXXXXXXXXXX">
+                            <small>Changing this will update the AdSense script on the page</small>
+                        </div>
+                        <button id="save-adsense-id" class="secondary-button">Save AdSense ID</button>
                     </div>
                     <table class="admin-table">
                         <thead>
                             <tr>
                                 <th>ID</th>
                                 <th>Name</th>
+                                <th>Provider</th>
+                                <th>Placement</th>
                                 <th>Type</th>
-                                <th>Duration</th>
                                 <th>Status</th>
                                 <th>Actions</th>
                             </tr>
@@ -448,35 +467,20 @@
                     </form>
                     
                     <div class="subscription-section">
-                        <h3>Subscription</h3>
-                        <div class="plan-details">
-                            <div id="free-plan" class="plan-card">
-                                <div class="plan-header">
-                                    <h4>Free Plan</h4>
-                                    <span class="plan-price">$0/month</span>
-                                </div>
-                                <ul class="plan-features">
-                                    <li><i class="fas fa-check"></i> 5 scans per day</li>
-                                    <li><i class="fas fa-check"></i> Basic analysis</li>
-                                    <li><i class="fas fa-times"></i> Advanced features</li>
-                                    <li><i class="fas fa-times"></i> Ad-free experience</li>
-                                </ul>
-                                <button id="current-plan-btn" class="secondary-button" disabled>Current Plan</button>
+                        <h3>Ad Settings</h3>
+                        <p>This application is supported by ads. Watching an ad grants you additional scans.</p>
+                        <div class="ad-settings">
+                            <div class="ad-setting-item">
+                                <h4>Scans per day</h4>
+                                <p>You can perform up to 5 scans per day for free.</p>
                             </div>
-                            
-                            <div id="pro-plan" class="plan-card">
-                                <div class="plan-header">
-                                    <h4>Pro Plan</h4>
-                                    <span class="plan-price">$9.99/month</span>
-                                </div>
-                                <ul class="plan-features">
-                                    <li><i class="fas fa-check"></i> Unlimited scans</li>
-                                    <li><i class="fas fa-check"></i> Advanced analysis</li>
-                                    <li><i class="fas fa-check"></i> All premium features</li>
-                                    <li><i class="fas fa-check"></i> Ad-free experience</li>
-                                </ul>
-                                <button id="upgrade-plan-btn" class="primary-button">Upgrade</button>
+                            <div class="ad-setting-item">
+                                <h4>Ad rewards</h4>
+                                <p>Each ad you watch gives you one scan.</p>
                             </div>
+                            <button id="watch-ad-now" class="primary-button">
+                                <i class="fas fa-play-circle"></i> Watch Ad Now
+                            </button>
                         </div>
                     </div>
                 </div>

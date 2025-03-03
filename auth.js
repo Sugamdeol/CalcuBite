@@ -19,7 +19,6 @@ const premiumNotification = document.getElementById('premium-notification');
 // Global user state
 let currentUser = null;
 let userProfile = null;
-let isPremium = false;
 let lastAdWatched = null;
 
 // Authentication state
@@ -64,35 +63,39 @@ async function fetchUserProfile() {
   }
   
   userProfile = data;
-  isPremium = data.is_premium;
   lastAdWatched = data.last_ad_watched;
 }
 
 // Create new user profile
 async function createUserProfile() {
-  if (!currentUser) return;
+  if (!currentUser) return null;
   
-  const { data, error } = await supabase
-    .from('profiles')
-    .insert([{
-      id: currentUser.id,
-      full_name: currentUser.user_metadata?.full_name || 'User',
-      avatar_url: currentUser.user_metadata?.avatar_url || null,
-      email: currentUser.email,
-      is_premium: false,
-      is_admin: false,
-      scans_remaining: 5,
-      last_scan_reset: new Date().toISOString()
-    }])
-    .select()
-    .single();
-  
-  if (error) {
-    console.error('Error creating user profile:', error);
-    return;
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .insert([{
+        id: currentUser.id,
+        full_name: currentUser.user_metadata?.full_name || 'User',
+        avatar_url: currentUser.user_metadata?.avatar_url || null,
+        email: currentUser.email,
+        is_admin: false,
+        scans_remaining: 5,
+        last_scan_reset: new Date().toISOString()
+      }])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error creating user profile:', error);
+      return null;
+    }
+    
+    userProfile = data;
+    return data;
+  } catch (err) {
+    console.error('Exception creating user profile:', err);
+    return null;
   }
-  
-  userProfile = data;
 }
 
 // Update UI for authenticated user
@@ -110,26 +113,22 @@ function updateUIForUser() {
     userAvatarElem.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userNameElem.textContent)}&background=random`;
   }
   
-  // Set user tier
-  userTierElem.textContent = isPremium ? 'Pro' : 'Free';
-  
   // Show admin link if user is admin
-  if (userProfile?.is_admin) {
-    adminLinkElem.style.display = 'flex';
-  } else {
-    adminLinkElem.style.display = 'none';
+  if (adminLinkElem) {
+    if (userProfile?.is_admin) {
+      adminLinkElem.style.display = 'flex';
+    } else {
+      adminLinkElem.style.display = 'none';
+    }
   }
   
-  // Check if premium features should be unlocked by ad viewing
+  // Check if features should be unlocked by ad viewing
   checkAdUnlock();
 }
 
 // Check if user has watched an ad recently
 function checkAdUnlock() {
-  if (isPremium) {
-    premiumNotification.style.display = 'none';
-    return;
-  }
+  if (!premiumNotification) return;
   
   const now = new Date();
   const adWatchedTime = lastAdWatched ? new Date(lastAdWatched) : null;
@@ -148,26 +147,39 @@ function showLoginForm() {
   appContainer.style.display = 'none';
   
   // Clone template content
-  const content = document.importNode(loginTemplate.content, true);
+  const template = document.getElementById('login-template');
+  if (!template) {
+    console.error('Login template not found');
+    return;
+  }
+  
+  const content = document.importNode(template.content, true);
   authContainer.innerHTML = '';
   authContainer.appendChild(content);
   
   // Add event listeners
-  document.getElementById('login-form').addEventListener('submit', handleLogin);
-  document.getElementById('register-link').addEventListener('click', showRegisterForm);
-  document.getElementById('forgot-password-link').addEventListener('click', showResetPasswordForm);
-  document.getElementById('google-login').addEventListener('click', handleGoogleLogin);
+  const loginForm = document.getElementById('login-form');
+  const registerLink = document.getElementById('register-link');
+  const forgotPasswordLink = document.getElementById('forgot-password-link');
+  const googleLoginBtn = document.getElementById('google-login');
+  
+  if (loginForm) loginForm.addEventListener('submit', handleLogin);
+  if (registerLink) registerLink.addEventListener('click', showRegisterForm);
+  if (forgotPasswordLink) forgotPasswordLink.addEventListener('click', showResetPasswordForm);
+  if (googleLoginBtn) googleLoginBtn.addEventListener('click', handleGoogleLogin);
   
   // Password visibility toggle
   const togglePassword = document.querySelector('.toggle-password');
   const passwordInput = document.getElementById('login-password');
   
-  togglePassword.addEventListener('click', () => {
-    const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-    passwordInput.setAttribute('type', type);
-    togglePassword.classList.toggle('fa-eye');
-    togglePassword.classList.toggle('fa-eye-slash');
-  });
+  if (togglePassword && passwordInput) {
+    togglePassword.addEventListener('click', () => {
+      const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+      passwordInput.setAttribute('type', type);
+      togglePassword.classList.toggle('fa-eye');
+      togglePassword.classList.toggle('fa-eye-slash');
+    });
+  }
 }
 
 // Show the register form
@@ -317,12 +329,16 @@ async function handleResetPassword(e) {
     if (error) throw error;
     
     // Show success message
-    successElement.style.display = 'block';
-    successElement.textContent = 'Password reset link sent! Please check your email.';
+    if (successElement) {  
+      successElement.style.display = 'block';
+      successElement.textContent = 'Password reset link sent! Please check your email.';
+    }
     
   } catch (error) {
-    errorElement.style.display = 'block';
-    errorElement.textContent = error.message || 'Failed to send reset link. Please try again.';
+    if (errorElement) {  
+      errorElement.style.display = 'block';
+      errorElement.textContent = error.message || 'Failed to send reset link. Please try again.';
+    }
   }
 }
 
@@ -350,7 +366,6 @@ async function handleLogout() {
     await supabase.auth.signOut();
     currentUser = null;
     userProfile = null;
-    isPremium = false;
     showLoginForm();
   } catch (error) {
     console.error('Logout error:', error);
@@ -404,131 +419,210 @@ function calculatePasswordStrength(password) {
 
 // Watch ad to unlock premium features temporarily
 async function watchAd() {
-  const adModal = document.getElementById('ad-modal');
-  const adTimerElement = document.getElementById('ad-timer');
-  const skipButton = document.getElementById('ad-skip-button');
-  const skipTimerElement = document.getElementById('skip-timer');
-  
-  // Show ad modal
-  adModal.style.display = 'block';
-  
-  // Simulate ad playback
-  let adDuration = 30;
-  let skipDuration = 5;
-  
-  // Update ad timer every second
-  const adInterval = setInterval(() => {
-    adTimerElement.textContent = `${adDuration}s`;
-    adDuration--;
+  try {
+    const adModal = document.getElementById('ad-modal');
     
-    if (adDuration < 0) {
-      clearInterval(adInterval);
-      completeAd();
+    if (!adModal) {
+      console.error('Ad modal element not found');
+      return;
     }
-  }, 1000);
-  
-  // Update skip timer
-  const skipInterval = setInterval(() => {
-    skipTimerElement.textContent = skipDuration;
-    skipDuration--;
     
-    if (skipDuration < 0) {
-      clearInterval(skipInterval);
-      skipButton.disabled = false;
-      skipButton.textContent = 'Skip Ad';
+    const adTimerElement = document.getElementById('ad-timer');
+    const skipButton = document.getElementById('ad-skip-button');
+    const skipTimerElement = document.getElementById('skip-timer');
+    
+    if (!adTimerElement || !skipButton || !skipTimerElement) {
+      console.error('Ad elements not found');
+      return;
     }
-  }, 1000);
-  
-  // Skip button event
-  skipButton.addEventListener('click', () => {
-    if (!skipButton.disabled) {
-      clearInterval(adInterval);
-      clearInterval(skipInterval);
-      completeAd();
-    }
-  });
-  
-  // Complete ad function
-  async function completeAd() {
-    // Hide ad modal
-    adModal.style.display = 'none';
     
-    // Update user profile
-    lastAdWatched = new Date().toISOString();
+    // Show ad modal
+    adModal.style.display = 'block';
+  
+    // Simulate ad playback
+    let adDuration = 30;
+    let skipDuration = 5;
     
-    // Update in database
-    if (currentUser) {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ last_ad_watched: lastAdWatched })
-        .eq('id', currentUser.id);
+    // Update ad timer every second
+    const adInterval = setInterval(() => {
+      adTimerElement.textContent = `${adDuration}s`;
+      adDuration--;
       
-      if (error) {
-        console.error('Error updating ad watched time:', error);
+      if (adDuration < 0) {
+        clearInterval(adInterval);
+        completeAd();
+      }
+    }, 1000);
+    
+    // Update skip timer
+    const skipInterval = setInterval(() => {
+      skipTimerElement.textContent = skipDuration;
+      skipDuration--;
+      
+      if (skipDuration < 0) {
+        clearInterval(skipInterval);
+        skipButton.disabled = false;
+        skipButton.textContent = 'Skip Ad';
+      }
+    }, 1000);
+    
+    // Skip button event
+    skipButton.addEventListener('click', function skipHandler() {
+      if (!skipButton.disabled) {
+        clearInterval(adInterval);
+        clearInterval(skipInterval);
+        skipButton.removeEventListener('click', skipHandler);
+        completeAd();
+      }
+    });
+    
+    // Complete ad function
+    async function completeAd() {
+      // Hide ad modal
+      adModal.style.display = 'none';
+      
+      // Update user profile
+      lastAdWatched = new Date().toISOString();
+      
+      // Reset user's scan count to maximum after watching ad
+      await resetScansAfterAd();
+      
+      // Update in database
+      if (currentUser) {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ 
+            last_ad_watched: lastAdWatched,
+            scans_remaining: 999 // Set to a high number to effectively make it unlimited for 24 hours
+          })
+          .eq('id', currentUser.id);
+        
+        if (error) {
+          console.error('Error updating ad watched time:', error);
+        }
+        
+        // Update analytics
+        try {
+          const { error: analyticsError } = await supabase
+            .from('analytics')
+            .insert([{
+              user_id: currentUser.id,
+              event_type: 'ad_watched',
+              event_data: {}
+            }]);
+          
+          if (analyticsError) {
+            console.error('Error logging analytics:', analyticsError);
+          }
+        } catch (analyticsEx) {
+          console.error('Exception logging analytics:', analyticsEx);
+        }
       }
       
-      // Update analytics
-      const { error: analyticsError } = await supabase
-        .from('analytics')
-        .insert([{
-          user_id: currentUser.id,
-          event_type: 'ad_watched',
-          event_data: {}
-        }]);
-      
-      if (analyticsError) {
-        console.error('Error logging analytics:', analyticsError);
+      // Update local user profile
+      if (userProfile) {
+        userProfile.last_ad_watched = lastAdWatched;
+        userProfile.scans_remaining = 999; // Set to unlimited for 24 hours
       }
+      
+      // Hide premium notification
+      const premiumNotification = document.getElementById('premium-notification');
+      if (premiumNotification) {
+        premiumNotification.style.display = 'none';
+      }
+      
+      // Show success notification
+      alert('Thank you for watching! Unlimited scans unlocked for 24 hours.');
+    }
+  } catch (error) {
+    console.error('Error showing ad:', error);
+    alert('An error occurred while trying to show the ad. Please try again.');
+  }
+}
+
+// Reset user's scan count after watching an ad
+async function resetScansAfterAd() {
+  if (!currentUser) return false;
+  
+  try {
+    // Get the system settings to determine max scans
+    const { data: settingsData, error: settingsError } = await supabase
+      .from('system_settings')
+      .select('free_scans_per_day')
+      .single();
+    
+    const defaultScans = 5;
+    const maxScans = settingsData?.free_scans_per_day || defaultScans;
+    
+    // Update the user's scans_remaining to max value
+    const { error } = await supabase
+      .from('profiles')
+      .update({ scans_remaining: 999 }) // Set to a high number to effectively make it unlimited
+      .eq('id', currentUser.id);
+    
+    if (error) {
+      console.error('Error resetting scans count:', error);
+      return false;
     }
     
-    // Hide premium notification
-    premiumNotification.style.display = 'none';
+    // Update local user profile
+    if (userProfile) {
+      userProfile.scans_remaining = 999;
+    }
     
-    // Show success notification
-    alert('Thank you for watching! Premium features unlocked for 24 hours.');
+    return true;
+  } catch (error) {
+    console.error('Error in resetScansAfterAd:', error);
+    return false;
   }
 }
 
 // Update scans remaining for user
 async function updateScansRemaining(scansUsed = 1) {
   if (!currentUser) return true;
-  if (isPremium) return true;
   
-  // Check if userProfile exists
+  // Check if user profile exists
   if (!userProfile) {
     await fetchUserProfile();
-    // If still no profile, create one
+    // Create profile if it doesn't exist
     if (!userProfile) {
-      await createUserProfile();
+      userProfile = await createUserProfile();
       if (!userProfile) return false;
     }
   }
   
+  // Ensure scans_remaining has a valid value
+  if (!userProfile.scans_remaining && userProfile.scans_remaining !== 0) {
+    userProfile.scans_remaining = 5;
+  }
+  
   if (userProfile.scans_remaining <= 0) {
     // Out of scans, show notification
-    alert('You have reached your daily scan limit. Upgrade to Pro or watch an ad to continue.');
+    if (premiumNotification) premiumNotification.style.display = 'flex';
     return false;
   }
   
   const newScansRemaining = userProfile.scans_remaining - scansUsed;
   
-  const { error } = await supabase
-    .from('profiles')
-    .update({ scans_remaining: newScansRemaining })
-    .eq('id', currentUser.id);
-  
-  if (error) {
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ scans_remaining: newScansRemaining })
+      .eq('id', currentUser.id);
+    
+    if (error) throw error;
+    
+    userProfile.scans_remaining = newScansRemaining;
+    return true;
+  } catch (error) {
     console.error('Error updating scans remaining:', error);
     return false;
   }
-  
-  userProfile.scans_remaining = newScansRemaining;
-  return true;
 }
 
 // Reset daily scan count
 async function resetDailyScanCount() {
-  if (!currentUser || isPremium) return;
+  if (!currentUser) return;
   
   const lastReset = new Date(userProfile.last_scan_reset);
   const now = new Date();
@@ -574,38 +668,229 @@ async function updateProfile(profileData) {
   return true;
 }
 
-// Add event listeners
+// Show profile modal
+function showProfileModal() {
+  const profileModal = document.getElementById('profile-modal');
+  if (!profileModal) {
+    console.error('Profile modal element not found');
+    return;
+  }
+  
+  // Ensure the user profile data is loaded before proceeding
+  if (!userProfile) {
+    fetchUserProfile().then(() => {
+      if (userProfile) {
+        populateProfileModal();
+      } else {
+        console.error('Failed to load user profile');
+        alert('Unable to load profile data. Please try again.');
+      }
+    }).catch(error => {
+      console.error('Error fetching profile data:', error);
+      alert('Unable to load profile data. Please try again.');
+    });
+  } else {
+    populateProfileModal();
+  }
+  
+  // Show modal
+  profileModal.style.display = 'block';
+}
+
+// Helper function to populate profile modal with data
+function populateProfileModal() {
+  const nameInput = document.getElementById('profile-name');
+  const emailInput = document.getElementById('profile-email');
+  const planInput = document.getElementById('profile-plan');
+  const avatarImg = document.getElementById('profile-avatar-img');
+  const freePlan = document.getElementById('free-plan');
+  const proPlan = document.getElementById('pro-plan');
+  const currentPlanBtn = document.getElementById('current-plan-btn');
+  const upgradePlanBtn = document.getElementById('upgrade-plan-btn');
+  
+  // Check if essential elements exist before proceeding
+  if (!nameInput || !emailInput) {
+    console.error('Essential profile elements not found');
+    return;
+  }
+  
+  // Fill profile data
+  nameInput.value = userProfile?.full_name || '';
+  emailInput.value = currentUser?.email || '';
+  if (planInput) planInput.value = 'Free';
+  
+  if (userProfile?.avatar_url) {
+    avatarImg.src = userProfile.avatar_url;
+  } else {
+    avatarImg.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(nameInput.value)}&background=random`;
+  }
+  
+  // Show/hide plan buttons based on current plan - with null checks
+  if (freePlan) freePlan.classList.add('active-plan');
+  if (proPlan) proPlan.classList.remove('active-plan');
+  if (currentPlanBtn) currentPlanBtn.style.display = 'none';
+  if (upgradePlanBtn) {
+    upgradePlanBtn.style.display = 'block';
+    upgradePlanBtn.textContent = 'Watch Ad Now';
+    upgradePlanBtn.disabled = false;
+  }
+  
+  // Form submission
+  const profileForm = document.getElementById('profile-form');
+  if (profileForm) {
+    profileForm.onsubmit = async (e) => {
+      e.preventDefault();
+      
+      const newName = nameInput.value.trim();
+      const newPassword = document.getElementById('profile-password')?.value.trim() || '';
+      
+      let updateData = {};
+      
+      if (newName && newName !== userProfile?.full_name) {
+        updateData.full_name = newName;
+      }
+      
+      // Update profile in supabase
+      if (Object.keys(updateData).length > 0) {
+        const success = await updateProfile(updateData);
+        
+        if (success) {
+          alert('Profile updated successfully!');
+        } else {
+          alert('Failed to update profile. Please try again.');
+        }
+      }
+      
+      // Update password if provided
+      if (newPassword) {
+        try {
+          const { error } = await supabase.auth.updateUser({
+            password: newPassword
+          });
+          
+          if (error) throw error;
+          
+          alert('Password updated successfully!');
+        } catch (error) {
+          alert(`Failed to update password: ${error.message}`);
+        }
+      }
+    };
+  }
+  
+  // Change avatar
+  const changeAvatarBtn = document.getElementById('change-avatar');
+  if (changeAvatarBtn) {
+    changeAvatarBtn.onclick = () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      
+      input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        if (file.size > 2 * 1024 * 1024) {
+          alert('File size must be less than 2MB');
+          return;
+        }
+        
+        try {
+          // Upload to supabase storage
+          const fileName = `avatar-${currentUser.id}-${Date.now()}`;
+          const { data, error } = await supabase.storage
+            .from('avatars')
+            .upload(fileName, file);
+          
+          if (error) throw error;
+          
+          // Get public URL
+          const { data: urlData } = await supabase.storage
+            .from('avatars')
+            .getPublicUrl(fileName);
+          
+          // Update profile with new avatar URL
+          const avatarUrl = urlData.publicUrl;
+          const success = await updateProfile({ avatar_url: avatarUrl });
+          
+          if (success) {
+            avatarImg.src = avatarUrl;
+            if (userAvatarElem) userAvatarElem.src = avatarUrl;
+          }
+          
+        } catch (error) {
+          alert(`Failed to upload avatar: ${error.message}`);
+        }
+      };
+      
+      input.click();
+    };
+  }
+  
+  // Upgrade plan button with null check
+  if (upgradePlanBtn) {
+    upgradePlanBtn.onclick = () => {
+      watchAd();
+    };
+  }
+}
+
+// Show upgrade modal
+function showUpgradeModal() {
+  watchAd(); // Instead of premium upgrade, we just show an ad
+}
+
+// Initialize event listeners
 document.addEventListener('DOMContentLoaded', () => {
   // Check authentication on page load
   checkAuth();
   
   // Logout event
-  document.getElementById('logout-link').addEventListener('click', (e) => {
-    e.preventDefault();
-    handleLogout();
-  });
+  const logoutLink = document.getElementById('logout-link');
+  if (logoutLink) {
+    logoutLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      handleLogout();
+    });
+  }
   
   // Profile link
-  document.getElementById('profile-link').addEventListener('click', (e) => {
-    e.preventDefault();
-    showProfileModal();
-  });
+  const profileLink = document.getElementById('profile-link');
+  if (profileLink) {
+    profileLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      showProfileModal();
+    });
+  }
   
   // Admin link
-  document.getElementById('admin-link').addEventListener('click', (e) => {
-    e.preventDefault();
-    showAdminDashboard();
-  });
+  const adminLink = document.getElementById('admin-link');
+  if (adminLink) {
+    adminLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (window.admin && typeof window.admin.showAdminDashboard === 'function') {
+        window.admin.showAdminDashboard();
+      } else {
+        console.error('Admin functionality not available');
+      }
+    });
+  }
   
   // Watch ad button
-  document.getElementById('watch-ad-button').addEventListener('click', () => {
-    watchAd();
-  });
+  const watchAdButton = document.getElementById('watch-ad-button');
+  if (watchAdButton) {
+    watchAdButton.addEventListener('click', () => {
+      watchAd();
+    });
+  }
   
-  // Upgrade button
-  document.getElementById('upgrade-button').addEventListener('click', () => {
-    showUpgradeModal();
-  });
+  // Watch ad in profile modal
+  const watchAdNow = document.getElementById('watch-ad-now');
+  if (watchAdNow) {
+    watchAdNow.addEventListener('click', () => {
+      watchAd();
+    });
+  }
   
   // Close modals when clicking outside
   window.addEventListener('click', (e) => {
@@ -645,151 +930,6 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// Show profile modal
-function showProfileModal() {
-  const profileModal = document.getElementById('profile-modal');
-  const nameInput = document.getElementById('profile-name');
-  const emailInput = document.getElementById('profile-email');
-  const planInput = document.getElementById('profile-plan');
-  const avatarImg = document.getElementById('profile-avatar-img');
-  const freePlan = document.getElementById('free-plan');
-  const proPlan = document.getElementById('pro-plan');
-  const currentPlanBtn = document.getElementById('current-plan-btn');
-  const upgradePlanBtn = document.getElementById('upgrade-plan-btn');
-  
-  // Fill profile data
-  nameInput.value = userProfile?.full_name || '';
-  emailInput.value = currentUser?.email || '';
-  planInput.value = isPremium ? 'Pro' : 'Free';
-  
-  if (userProfile?.avatar_url) {
-    avatarImg.src = userProfile.avatar_url;
-  } else {
-    avatarImg.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(nameInput.value)}&background=random`;
-  }
-  
-  // Show/hide plan buttons based on current plan
-  if (isPremium) {
-    freePlan.classList.remove('active-plan');
-    proPlan.classList.add('active-plan');
-    currentPlanBtn.style.display = 'none';
-    upgradePlanBtn.style.display = 'block';
-    upgradePlanBtn.textContent = 'Current Plan';
-    upgradePlanBtn.disabled = true;
-  } else {
-    freePlan.classList.add('active-plan');
-    proPlan.classList.remove('active-plan');
-    currentPlanBtn.style.display = 'block';
-    upgradePlanBtn.style.display = 'block';
-    upgradePlanBtn.textContent = 'Upgrade';
-    upgradePlanBtn.disabled = false;
-  }
-  
-  // Form submission
-  document.getElementById('profile-form').onsubmit = async (e) => {
-    e.preventDefault();
-    
-    const newName = nameInput.value.trim();
-    const newPassword = document.getElementById('profile-password').value.trim();
-    
-    let updateData = {};
-    
-    if (newName && newName !== userProfile?.full_name) {
-      updateData.full_name = newName;
-    }
-    
-    // Update profile in supabase
-    if (Object.keys(updateData).length > 0) {
-      const success = await updateProfile(updateData);
-      
-      if (success) {
-        alert('Profile updated successfully!');
-      } else {
-        alert('Failed to update profile. Please try again.');
-      }
-    }
-    
-    // Update password if provided
-    if (newPassword) {
-      try {
-        const { error } = await supabase.auth.updateUser({
-          password: newPassword
-        });
-        
-        if (error) throw error;
-        
-        alert('Password updated successfully!');
-      } catch (error) {
-        alert(`Failed to update password: ${error.message}`);
-      }
-    }
-  };
-  
-  // Change avatar
-  document.getElementById('change-avatar').onclick = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    
-    input.onchange = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      
-      if (file.size > 2 * 1024 * 1024) {
-        alert('File size must be less than 2MB');
-        return;
-      }
-      
-      try {
-        // Upload to supabase storage
-        const fileName = `avatar-${currentUser.id}-${Date.now()}`;
-        const { data, error } = await supabase.storage
-          .from('avatars')
-          .upload(fileName, file);
-        
-        if (error) throw error;
-        
-        // Get public URL
-        const { data: urlData } = await supabase.storage
-          .from('avatars')
-          .getPublicUrl(fileName);
-        
-        // Update profile with new avatar URL
-        const avatarUrl = urlData.publicUrl;
-        const success = await updateProfile({ avatar_url: avatarUrl });
-        
-        if (success) {
-          avatarImg.src = avatarUrl;
-          userAvatarElem.src = avatarUrl;
-        }
-        
-      } catch (error) {
-        alert(`Failed to upload avatar: ${error.message}`);
-      }
-    };
-    
-    input.click();
-  };
-  
-  // Upgrade plan
-  upgradePlanBtn.onclick = () => {
-    if (!isPremium) {
-      showUpgradeModal();
-    }
-  };
-  
-  // Show modal
-  profileModal.style.display = 'block';
-}
-
-// Show upgrade modal
-function showUpgradeModal() {
-  alert('This is a demo version. In a real application, this would redirect to a payment processor.');
-  
-  // In a real app, you would redirect to Stripe or another payment processor
-  // And then handle the webhook from Stripe to update the user's subscription
-}
-
 // Export functions to be used in other scripts
 window.auth = {
   checkAuth,
@@ -798,6 +938,6 @@ window.auth = {
   watchAd,
   currentUser: () => currentUser,
   userProfile: () => userProfile,
-  isPremium: () => isPremium,
+  isPremium: () => false, // Always return false since we removed premium features
   lastAdWatched: () => lastAdWatched
 };

@@ -234,15 +234,86 @@ async function analyzeImage(base64Image) {
   // Check if user can perform a scan
   if (window.auth.currentUser()) {
     try {
-      // Only check scan limits for non-premium users
-      if (!window.auth.isPremium()) {
-        const canScan = await window.auth.updateScansRemaining(1);
-        if (!canScan) {
-          // Show premium notification if user can't scan
-          premiumNotification.style.display = 'flex';
-          loadingDiv.style.display = 'none';
-          return;
-        }
+      const adWatchedTime = window.auth.lastAdWatched() ? new Date(window.auth.lastAdWatched()) : null;
+      const now = new Date();
+      const needsAd = !adWatchedTime || ((now - adWatchedTime) / (1000 * 60 * 60)) >= 24;
+      
+      if (needsAd) {
+        // Show ad before analysis
+        await new Promise((resolve) => {
+          const adModal = document.getElementById('ad-modal');
+          const adTimerElement = document.getElementById('ad-timer');
+          const skipButton = document.getElementById('ad-skip-button');
+          const skipTimerElement = document.getElementById('skip-timer');
+          
+          if (!adModal || !adTimerElement || !skipButton || !skipTimerElement) {
+            console.error('Ad elements not found');
+            resolve();
+            return;
+          }
+          
+          // Show ad modal
+          adModal.style.display = 'block';
+          
+          // Simulate ad playback
+          let adDuration = 10; // Reduced for testing
+          let skipDuration = 3; // Reduced for testing
+          
+          // Update ad timer every second
+          const adInterval = setInterval(() => {
+            adTimerElement.textContent = `${adDuration}s`;
+            adDuration--;
+            
+            if (adDuration < 0) {
+              clearInterval(adInterval);
+              completeAd();
+            }
+          }, 1000);
+          
+          // Update skip timer
+          const skipInterval = setInterval(() => {
+            skipTimerElement.textContent = skipDuration;
+            skipDuration--;
+            
+            if (skipDuration < 0) {
+              clearInterval(skipInterval);
+              skipButton.disabled = false;
+              skipButton.textContent = 'Skip Ad';
+            }
+          }, 1000);
+          
+          // Skip button event
+          skipButton.addEventListener('click', function skipHandler() {
+            if (!skipButton.disabled) {
+              clearInterval(adInterval);
+              clearInterval(skipInterval);
+              skipButton.removeEventListener('click', skipHandler);
+              completeAd();
+            }
+          });
+          
+          // Complete ad function
+          async function completeAd() {
+            // Hide ad modal
+            adModal.style.display = 'none';
+            
+            // Update user profile with ad watched time and reset scans
+            if (window.auth.currentUser()) {
+              await window.auth.watchAd();
+            }
+            
+            resolve();
+          }
+        });
+      }
+      
+      const canScan = await window.auth.updateScansRemaining(1);
+      if (!canScan) {
+        // Show ad notification if user can't scan
+        const premiumNotification = document.getElementById('premium-notification');
+        if (premiumNotification) premiumNotification.style.display = 'flex';
+        loadingDiv.style.display = 'none';
+        return;
       }
     } catch (error) {
       console.error('Error checking scan permissions:', error);
@@ -252,7 +323,7 @@ async function analyzeImage(base64Image) {
       return;
     }
   }
-  
+
   let systemPrompt;
   
   if (currentMode === 'label') {
@@ -463,57 +534,83 @@ Your response MUST be valid JSON with this structure:
 }`;
   }
 
-  try {
-    loadingDiv.style.display = 'block';
-    errorDiv.style.display = 'none';
-    
-    const completion = await websim.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: systemPrompt
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: currentMode === 'label' ? 
-                "Analyze this food label and provide detailed insights:" : 
-                (currentMode === 'food' ? 
-                  "Analyze this food image and provide detailed nutritional insights:" :
-                  "Analyze this food image from a fitness and workout perspective:")
-            },
-            {
-              type: "image_url",
-              image_url: { url: `data:image/jpeg;base64,${base64Image}` }
-            }
-          ]
-        }
-      ],
-      model: "openai-large", // Use the larger model
-      json: true
-    });
-
-    // Store the data globally for the AI chat to use
-    analysisData = JSON.parse(completion.content);
-    displayResults(analysisData);
-    loadingDiv.style.display = 'none';
-    
-    // Log the scan to the database
-    if (window.auth.currentUser()) {
-      logScan(currentMode, {
-        rating: analysisData.rating,
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-  } catch (error) {
-    errorDiv.style.display = 'block';
-    errorDiv.textContent = 'Error analyzing image: ' + error.message;
-    loadingDiv.style.display = 'none';
-    console.error("API Error:", error);
+  const userPrompt = currentMode === 'label' ? 
+    "Analyze this food label and provide detailed insights:" : 
+    (currentMode === 'food' ? 
+      "Analyze this food image and provide detailed nutritional insights:" :
+      "Analyze this food image from a fitness and workout perspective:");
+  
+  const requestBody = {
+    messages: [
+      {
+        role: "system",
+        content: systemPrompt
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: userPrompt
+          },
+          {
+            type: "image_url",
+            image_url: { url: `data:image/jpeg;base64,${base64Image}` }
+          }
+        ]
+      }
+    ],
+    model: "openai",
+    jsonMode: true,
+    private: true
+  };
+  
+  const response = await fetch('https://text.pollinations.ai/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(requestBody)
+  });
+  
+  if (!response.ok) {
+    throw new Error(`API responded with status: ${response.status}`);
   }
+  
+  const data = await response.json();
+  
+  try {
+    if (data && data.content) {
+      // Try parsing as JSON if content is a string
+      if (typeof data.content === 'string') {
+        analysisData = JSON.parse(data.content);
+      } else if (typeof data.content === 'object') {
+        // If content is already an object
+        analysisData = data.content;
+      }
+    } else if (data && typeof data === 'object') {
+      // If the data itself is the result object
+      analysisData = data;
+    } else {
+      throw new Error('Invalid response format from API');
+    }
+  } catch (parseError) {
+    console.error('Error parsing JSON:', parseError);
+    throw new Error('Error parsing response: ' + parseError.message);
+  }
+  
+  // Display the results
+  displayResults(analysisData);
+  loadingDiv.style.display = 'none';
+  
+  // Log the scan to the database if authenticated
+  if (window.auth.currentUser()) {
+    logScan(currentMode, {
+      rating: analysisData?.rating || 5,
+      timestamp: new Date().toISOString()
+    });
+  }
+  
 }
 
 // Display results function - updated to handle gym mode
@@ -637,12 +734,6 @@ function displayResults(data) {
         </div>
         <small>${macroRatio.fat}% of calories</small>
       </div>
-      ${nutrition.fiber ? `
-      <div class="nutrition-item">
-        <small>Fiber</small>
-        <div class="nutrition-value">${nutrition.fiber}</div>
-      </div>
-      ` : ''}
     `;
     
     // Add vitamins and minerals if available
@@ -1394,6 +1485,140 @@ function toggleTheme() {
   }
 }
 
+// Function to load and display ads
+async function loadAds() {
+  try {
+    // Get active ads for each placement
+    const { data, error } = await supabase
+      .from('ads')
+      .select('*')
+      .eq('active', true)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error loading ads:', error);
+      return;
+    }
+    
+    if (!data || data.length === 0) {
+      return;
+    }
+    
+    // Group ads by placement
+    const adsByPlacement = {};
+    data.forEach(ad => {
+      const placement = ad.placement || 'in-content';
+      if (!adsByPlacement[placement]) {
+        adsByPlacement[placement] = [];
+      }
+      adsByPlacement[placement].push(ad);
+    });
+    
+    // Display ads in their designated placements
+    Object.keys(adsByPlacement).forEach(placement => {
+      const adContainers = document.querySelectorAll(`.ad-container[data-placement="${placement}"]`);
+      if (adContainers.length === 0) return;
+      
+      // Randomly select an ad for this placement
+      const randomIndex = Math.floor(Math.random() * adsByPlacement[placement].length);
+      const ad = adsByPlacement[placement][randomIndex];
+      
+      adContainers.forEach(container => {
+        if (ad.provider === 'custom') {
+          // Display custom ad
+          container.innerHTML = '';
+          if (ad.type === 'banner' && ad.file_url) {
+            container.innerHTML = `
+              <div class="custom-ad ${ad.size || 'medium'}" data-ad-id="${ad.id}">
+                <img src="${ad.file_url}" alt="${ad.name}" class="ad-image">
+              </div>
+            `;
+          } else if (ad.type === 'video' && ad.file_url) {
+            container.innerHTML = `
+              <div class="custom-ad ${ad.size || 'medium'}" data-ad-id="${ad.id}">
+                <video controls class="ad-video">
+                  <source src="${ad.file_url}" type="video/mp4">
+                  Your browser does not support the video tag.
+                </video>
+              </div>
+            `;
+          }
+          
+          // Log impression
+          logAdImpression(ad.id);
+          
+        } else if (ad.provider === 'adsense' || ad.provider === 'admanager' || ad.provider === 'other') {
+          // Display ad from external provider
+          container.innerHTML = ad.ad_code || '';
+          
+          // Log impression (if not automatically tracked by the provider)
+          logAdImpression(ad.id);
+        }
+      });
+    });
+    
+  } catch (error) {
+    console.error('Error in loadAds:', error);
+  }
+}
+
+// Log ad impression
+async function logAdImpression(adId) {
+  if (!window.auth.currentUser()) return;
+  
+  try {
+    await supabase
+      .from('ads')
+      .update({ impressions: supabase.rpc('increment', { count: 1 }) })
+      .eq('id', adId);
+    
+    // Also log in analytics
+    await supabase
+      .from('analytics')
+      .insert([{
+        user_id: window.auth.currentUser().id,
+        event_type: 'ad_impression',
+        event_data: { ad_id: adId }
+      }]);
+  } catch (error) {
+    console.error('Error logging ad impression:', error);
+  }
+}
+
+// Log ad click
+async function logAdClick(adId) {
+  if (!window.auth.currentUser()) return;
+  
+  try {
+    await supabase
+      .from('ads')
+      .update({ clicks: supabase.rpc('increment', { count: 1 }) })
+      .eq('id', adId);
+    
+    // Also log in analytics
+    await supabase
+      .from('analytics')
+      .insert([{
+        user_id: window.auth.currentUser().id,
+        event_type: 'ad_click',
+        event_data: { ad_id: adId }
+      }]);
+  } catch (error) {
+    console.error('Error logging ad click:', error);
+  }
+}
+
+// Add event listeners for ad clicks
+document.addEventListener('click', function(e) {
+  const adElement = e.target.closest('.custom-ad');
+  if (adElement) {
+    const adId = adElement.dataset.adId;
+    if (adId) {
+      logAdClick(adId);
+    }
+  }
+});
+
 // Initialize event listeners
 document.addEventListener('DOMContentLoaded', () => {
   // Check for auth confirmation in URL
@@ -1431,9 +1656,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   
   // Reset daily scan count if needed
-  if (window.auth.currentUser() && !window.auth.isPremium()) {
+  if (window.auth.currentUser()) {
     window.auth.resetDailyScanCount();
   }
+  
+  // Load ads
+  loadAds();
 });
 
 // Flash functionality
@@ -1461,4 +1689,21 @@ if (flashOption) {
       console.error('Flash error:', err);
     }
   });
+}
+
+// Check if user has watched an ad recently
+function checkAdUnlock() {
+  if (!premiumNotification) return;
+  
+  const now = new Date();
+  const adWatchedTime = lastAdWatched ? new Date(lastAdWatched) : null;
+  
+  // Ad unlocks features for 24 hours
+  if (adWatchedTime && ((now - adWatchedTime) / (1000 * 60 * 60)) < 24) {
+    premiumNotification.style.display = 'none';
+    return true; // User has active ad benefit
+  } else {
+    premiumNotification.style.display = 'flex';
+    return false; // User needs to watch ad
+  }
 }

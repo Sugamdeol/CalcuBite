@@ -2114,49 +2114,86 @@ a:hover {
 
 .ad-container {
   width: 100%;
-  height: 360px;
-  background-color: black;
+  margin: 2rem auto;
+  min-height: 90px;
   display: flex;
   justify-content: center;
   align-items: center;
+  background-color: transparent;
   border-radius: var(--radius-md);
-  margin-bottom: 1rem;
+  overflow: hidden;
+  position: relative;
 }
 
-.ad-placeholder {
-  text-align: center;
-  color: rgba(255, 255, 255, 0.5);
+.ad-container::before {
+  content: "Sponsored";
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 0.7rem;
+  background-color: rgba(0,0,0,0.05);
+  color: var(--text-tertiary);
+  padding: 2px 8px;
+  border-radius: 0 var(--radius-md) 0 var(--radius-sm);
+  z-index: 1;
 }
 
-.ad-placeholder i {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-}
-
-.ad-skip-button {
-  display: block;
-  margin-left: auto;
-  padding: 0.5rem 1rem;
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
-  border: none;
-  border-radius: var(--radius-md);
-  cursor: not-allowed;
-  transition: all var(--transition-fast);
-}
-
-.ad-skip-button:disabled {
-  opacity: 0.5;
-}
-
-.ad-skip-button:not(:disabled) {
-  background-color: var(--primary);
-  color: white;
+.custom-ad {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
   cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+  box-shadow: var(--shadow-sm);
+  background-color: var(--bg-secondary);
+  overflow: hidden;
 }
 
-.ad-skip-button:not(:disabled):hover {
-  background-color: var(--primary-dark);
+.custom-ad:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.custom-ad.small {
+  max-width: 300px;
+  height: 250px;
+  margin: 0 auto;
+}
+
+.custom-ad.medium {
+  max-width: 728px;
+  height: 90px;
+  margin: 0 auto;
+}
+
+.custom-ad.large {
+  max-width: 970px;
+  height: 250px;
+  margin: 0 auto;
+}
+
+.ad-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+}
+
+.ad-video {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--radius-sm);
+}
+
+/* Dark mode adjustments for ads */
+.dark-theme .ad-container::before {
+  background-color: rgba(255,255,255,0.1);
+}
+
+.dark-theme .custom-ad {
+  background-color: var(--bg-secondary);
 }
 
 /* Switch Toggle */
