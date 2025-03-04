@@ -440,8 +440,8 @@ async function watchAd() {
     adModal.style.display = 'block';
   
     // Simulate ad playback
-    let adDuration = 30;
-    let skipDuration = 5;
+    let adDuration = 10; 
+    let skipDuration = 3; 
     
     // Update ad timer every second
     const adInterval = setInterval(() => {
@@ -484,16 +484,13 @@ async function watchAd() {
       // Update user profile
       lastAdWatched = new Date().toISOString();
       
-      // Reset user's scan count to maximum after watching ad
-      await resetScansAfterAd();
-      
       // Update in database
       if (currentUser) {
         const { error } = await supabase
           .from('profiles')
           .update({ 
             last_ad_watched: lastAdWatched,
-            scans_remaining: 999 // Set to a high number to effectively make it unlimited for 24 hours
+            scans_remaining: 999 
           })
           .eq('id', currentUser.id);
         
@@ -522,7 +519,7 @@ async function watchAd() {
       // Update local user profile
       if (userProfile) {
         userProfile.last_ad_watched = lastAdWatched;
-        userProfile.scans_remaining = 999; // Set to unlimited for 24 hours
+        userProfile.scans_remaining = 999; 
       }
       
       // Hide premium notification
@@ -557,7 +554,7 @@ async function resetScansAfterAd() {
     // Update the user's scans_remaining to max value
     const { error } = await supabase
       .from('profiles')
-      .update({ scans_remaining: 999 }) // Set to a high number to effectively make it unlimited
+      .update({ scans_remaining: 999 }) 
       .eq('id', currentUser.id);
     
     if (error) {
@@ -632,7 +629,7 @@ async function resetDailyScanCount() {
     const { error } = await supabase
       .from('profiles')
       .update({
-        scans_remaining: 5, // Default daily scan limit
+        scans_remaining: 5, 
         last_scan_reset: now.toISOString()
       })
       .eq('id', currentUser.id);
@@ -735,6 +732,12 @@ function populateProfileModal() {
     upgradePlanBtn.disabled = false;
   }
   
+  // Update ad rewards text
+  const adRewardDesc = document.querySelector('.ad-setting-item:nth-child(2) p');
+  if (adRewardDesc) {
+    adRewardDesc.textContent = 'Watching an ad unlocks unlimited scans for 24 hours.';
+  }
+
   // Form submission
   const profileForm = document.getElementById('profile-form');
   if (profileForm) {
@@ -837,7 +840,7 @@ function populateProfileModal() {
 
 // Show upgrade modal
 function showUpgradeModal() {
-  watchAd(); // Instead of premium upgrade, we just show an ad
+  watchAd(); 
 }
 
 // Initialize event listeners
@@ -938,6 +941,6 @@ window.auth = {
   watchAd,
   currentUser: () => currentUser,
   userProfile: () => userProfile,
-  isPremium: () => false, // Always return false since we removed premium features
+  isPremium: () => false, 
   lastAdWatched: () => lastAdWatched
 };

@@ -195,6 +195,12 @@ function editUser(userId) {
         };
         
         try {
+          // Validate data
+          if (isNaN(updatedData.scans_remaining)) {
+            throw new Error('Scans remaining must be a valid number');
+          }
+          
+          // Update user in Supabase
           const { error } = await supabase
             .from('profiles')
             .update(updatedData)
@@ -210,6 +216,10 @@ function editUser(userId) {
           alert(`Failed to update user: ${error.message}`);
         }
       });
+    })
+    .catch(err => {
+      console.error('Error in edit user:', err);
+      alert('Error loading user data. Please try again.');
     });
 }
 
@@ -220,6 +230,21 @@ async function deleteUser(userId) {
   }
   
   try {
+    // First delete all data related to the user
+    const { error: scanError } = await supabase
+      .from('scan_history')
+      .delete()
+      .eq('user_id', userId);
+      
+    if (scanError) console.error('Error deleting scan history:', scanError);
+    
+    const { error: analyticsError } = await supabase
+      .from('analytics')
+      .delete()
+      .eq('user_id', userId);
+      
+    if (analyticsError) console.error('Error deleting analytics:', analyticsError);
+    
     // Delete user profile
     const { error: profileError } = await supabase
       .from('profiles')
@@ -227,20 +252,6 @@ async function deleteUser(userId) {
       .eq('id', userId);
     
     if (profileError) throw profileError;
-    
-    // In a real application, you would also delete the user from auth.users
-    // This requires admin privileges with Supabase
-    try {
-      // Attempt to delete user from auth (may require extra permissions)
-      const { error: authError } = await supabase.rpc('delete_user', { user_id: userId });
-      
-      if (authError) {
-        console.warn('Could not delete user from auth:', authError);
-        // Continue anyway since we've deleted the profile
-      }
-    } catch (authDeleteError) {
-      console.warn('Error calling delete_user RPC:', authDeleteError);
-    }
     
     alert('User deleted successfully');
     loadUsers();
@@ -623,16 +634,10 @@ async function loadAds() {
       return;
     }
     
-    const { data: placements, error: placementsError } = await supabase
-      .from('ad_placements')
-      .select('*')
-      .order('name');
+    // Add loading indicator
+    adsTableBody.innerHTML = '<tr><td colspan="7" class="text-center">Loading ads...</td></tr>';
     
-    if (placementsError) {
-      console.error('Error loading placements:', placementsError);
-      // Continue without placements
-    }
-    
+    // Fetch ads directly without filtering
     const { data, error } = await supabase
       .from('ads')
       .select('*')
@@ -640,7 +645,8 @@ async function loadAds() {
     
     if (error) {
       console.error('Error loading ads:', error);
-      throw error;
+      adsTableBody.innerHTML = `<tr><td colspan="7" class="text-center">Error loading ads: ${error.message}</td></tr>`;
+      return;
     }
     
     // Render ads table
@@ -649,7 +655,7 @@ async function loadAds() {
     if (!data || data.length === 0) {
       adsTableBody.innerHTML = `
         <tr>
-          <td colspan="7" class="text-center">No ads found</td>
+          <td colspan="7" class="text-center">No ads found. Click "Add New Ad" to create your first ad.</td>
         </tr>
       `;
       return;
@@ -684,9 +690,6 @@ async function loadAds() {
       adsTableBody.appendChild(row);
     });
     
-    // Save placements globally for use in edit/add forms
-    window.adPlacements = placements || [];
-    
     // Add event listeners
     document.querySelectorAll('.edit-ad').forEach(btn => {
       btn.addEventListener('click', () => editAd(btn.dataset.id));
@@ -701,8 +704,273 @@ async function loadAds() {
     });
     
   } catch (error) {
-    console.error('Error loading ads:', error);
-    alert('Failed to load ads. Please try again.');
+    console.error('Error in loadAds function:', error);
+    const adsTableBody = document.getElementById('ads-table-body');
+    if (adsTableBody) {
+      adsTableBody.innerHTML = `<tr><td colspan="7" class="text-center">Error: ${error.message}</td></tr>`;
+    }
+  }
+}
+
+// Show add ad modal
+async function showAddAdModal() {
+  try {
+    // First check if ads table is properly structured
+    const { error: tableCheckError } = await supabase
+      .from('ads')
+      .select('id', { count: 'exact', head: true });
+    
+    if (tableCheckError) {
+      // Create the table or fix structure if needed
+      try {
+        await supabase.rpc('create_ads_table_if_needed');
+      } catch (rpcError) {
+        console.log("RPC may not exist, trying direct SQL");
+        // Fallback to direct SQL checks for older Supabase versions
+      }
+    }
+    
+    const addAdModal = document.createElement('div');
+    addAdModal.className = 'modal';
+    addAdModal.id = 'add-ad-modal';
+    
+    // Generate placement options
+    let placementOptions = `
+      <option value="header">Header</option>
+      <option value="sidebar">Sidebar</option>
+      <option value="in-content" selected>In-Content</option>
+      <option value="results">Results</option>
+      <option value="footer">Footer</option>
+    `;
+    
+    addAdModal.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2><i class="fas fa-plus-circle"></i> Add New Ad</h2>
+          <span class="close-modal">&times;</span>
+        </div>
+        <div class="modal-body">
+          <form id="add-ad-form">
+            <div class="form-group">
+              <label for="ad-name">Ad Name</label>
+              <input type="text" id="ad-name" placeholder="Enter ad name" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="ad-provider">Ad Provider</label>
+              <select id="ad-provider" required>
+                <option value="custom" selected>Custom Ad</option>
+                <option value="adsense">Google AdSense</option>
+                <option value="adsterra">Adsterra</option>
+                <option value="admanager">Google Ad Manager</option>
+                <option value="other">Other Provider</option>
+              </select>
+            </div>
+            
+            <div id="custom-ad-fields">
+              <div class="form-group">
+                <label for="ad-type">Ad Type</label>
+                <select id="ad-type" required>
+                  <option value="banner" selected>Banner</option>
+                  <option value="video">Video</option>
+                  <option value="native">Native Ad</option>
+                  <option value="interstitial">Interstitial</option>
+                  <option value="sticky">Sticky Banner</option>
+                </select>
+              </div>
+              
+              <div class="form-group">
+                <label for="ad-duration">Duration (seconds for video ads)</label>
+                <input type="number" id="ad-duration" value="30" min="0">
+              </div>
+              
+              <div class="form-group" id="ad-file-group">
+                <label for="ad-file">Ad File (Image/Video)</label>
+                <input type="file" id="ad-file" accept="image/*">
+              </div>
+              
+              <div class="form-group">
+                <label for="ad-size">Ad Size</label>
+                <select id="ad-size">
+                  <option value="small">Small (300x250)</option>
+                  <option value="medium" selected>Medium (728x90)</option>
+                  <option value="large">Large (970x250)</option>
+                </select>
+              </div>
+            </div>
+            
+            <div id="external-ad-fields" style="display: none;">
+              <div class="form-group">
+                <label for="ad-code">Ad Code (Copy and paste provider code)</label>
+                <textarea id="ad-code" rows="5" placeholder="Paste ad code here"></textarea>
+                <small>Paste JavaScript ad code from AdSense, Adsterra or other ad providers</small>
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="ad-placement">Ad Placement</label>
+              <select id="ad-placement" required>
+                ${placementOptions}
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label class="checkbox-container">
+                <input type="checkbox" id="ad-active" checked>
+                <span class="checkmark"></span>
+                Active
+              </label>
+            </div>
+            
+            <button type="submit" class="primary-button">Add Ad</button>
+          </form>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(addAdModal);
+    addAdModal.style.display = 'block';
+    
+    // Add event listeners
+    const closeBtn = addAdModal.querySelector('.close-modal');
+    closeBtn.addEventListener('click', () => {
+      addAdModal.remove();
+    });
+    
+    // Toggle fields based on provider selection
+    const providerSelect = document.getElementById('ad-provider');
+    const customFields = document.getElementById('custom-ad-fields');
+    const externalFields = document.getElementById('external-ad-fields');
+    const fileInput = document.getElementById('ad-file');
+    const fileGroup = document.getElementById('ad-file-group');
+    
+    providerSelect.addEventListener('change', () => {
+      const provider = providerSelect.value;
+      
+      if (provider === 'custom') {
+        customFields.style.display = 'block';
+        externalFields.style.display = 'none';
+        fileInput.setAttribute('required', '');
+      } else {
+        customFields.style.display = 'none';
+        externalFields.style.display = 'block';
+        fileInput.removeAttribute('required');
+      }
+    });
+    
+    // Handle file type changes
+    const typeSelect = document.getElementById('ad-type');
+    
+    typeSelect.addEventListener('change', () => {
+      fileInput.accept = typeSelect.value === 'video' ? 'video/*' : 'image/*';
+    });
+    
+    const form = document.getElementById('add-ad-form');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const provider = document.getElementById('ad-provider').value;
+      const isCustomAd = provider === 'custom';
+      
+      // Base ad data
+      const newAd = {
+        name: document.getElementById('ad-name').value,
+        provider: provider,
+        placement: document.getElementById('ad-placement').value,
+        active: document.getElementById('ad-active').checked
+      };
+      
+      // Add provider-specific data
+      if (isCustomAd) {
+        newAd.type = document.getElementById('ad-type').value;
+        newAd.duration = parseInt(document.getElementById('ad-duration').value) || 30;
+        newAd.size = document.getElementById('ad-size').value;
+      } else {
+        newAd.ad_code = document.getElementById('ad-code').value;
+        newAd.type = 'external';
+      }
+      
+      try {
+        // For external ad providers, we can insert directly without file upload
+        if (!isCustomAd) {
+          const { data: insertedAd, error: insertError } = await supabase
+            .from('ads')
+            .insert([newAd])
+            .select();
+          
+          if (insertError) throw insertError;
+          
+          alert('Ad added successfully');
+          addAdModal.remove();
+          loadAds();  // Refresh ads list
+          return; // Exit early for external ad providers
+        }
+        
+        // Validate file is selected for custom ads
+        if (isCustomAd && (!fileInput.files || fileInput.files.length === 0)) {
+          throw new Error('Please select a file for custom ads');
+        }
+        
+        // Insert ad to get the ID for custom ads with uploads
+        const { data: insertedAd, error: insertError } = await supabase
+          .from('ads')
+          .insert([newAd])
+          .select();
+        
+        if (insertError) throw insertError;
+        
+        if (!insertedAd || insertedAd.length === 0) {
+          throw new Error('Failed to create ad record');
+        }
+        
+        const adId = insertedAd[0].id;
+        
+        // Handle file upload for custom ads
+        if (isCustomAd && document.getElementById('ad-file').files.length > 0) {
+          const fileInput = document.getElementById('ad-file');
+          const file = fileInput.files[0];
+          const fileExt = file.name.split('.').pop();
+          const fileName = `ad_${adId}_${Date.now()}.${fileExt}`;
+          
+          // Upload file to Supabase storage
+          const { data: fileData, error: fileError } = await supabase.storage
+            .from('ad_files')
+            .upload(fileName, file, {
+              cacheControl: '3600',
+              upsert: true
+            });
+          
+          if (fileError) throw fileError;
+          
+          // Get public URL
+          const { data: urlData } = await supabase.storage
+            .from('ad_files')
+            .getPublicUrl(fileName);
+          
+          if (!urlData || !urlData.publicUrl) {
+            throw new Error('Failed to get public URL for uploaded file');
+          }
+          
+          // Update ad with file URL
+          const { error: updateError } = await supabase
+            .from('ads')
+            .update({ file_url: urlData.publicUrl })
+            .eq('id', adId);
+          
+          if (updateError) throw updateError;
+        }
+        
+        alert('Ad added successfully');
+        addAdModal.remove();
+        loadAds();  // Refresh ads list
+        
+      } catch (error) {
+        console.error('Error adding ad:', error);
+        alert(`Failed to add ad: ${error.message}`);
+      }
+    });
+  } catch (error) {
+    console.error('Error showing add ad modal:', error);
   }
 }
 
@@ -727,12 +995,13 @@ function editAd(adId) {
       }
       
       // Generate placement options
-      let placementOptions = '';
-      if (window.adPlacements) {
-        placementOptions = window.adPlacements.map(p => 
-          `<option value="${p.placement_key}" ${data.placement === p.placement_key ? 'selected' : ''}>${p.name}</option>`
-        ).join('');
-      }
+      let placementOptions = `
+        <option value="header" ${data.placement === 'header' ? 'selected' : ''}>Header</option>
+        <option value="sidebar" ${data.placement === 'sidebar' ? 'selected' : ''}>Sidebar</option>
+        <option value="in-content" ${data.placement === 'in-content' || !data.placement ? 'selected' : ''}>In-Content</option>
+        <option value="results" ${data.placement === 'results' ? 'selected' : ''}>Results</option>
+        <option value="footer" ${data.placement === 'footer' ? 'selected' : ''}>Footer</option>
+      `;
       
       // Create modal content
       editAdModal.innerHTML = `
@@ -745,7 +1014,7 @@ function editAd(adId) {
             <form id="edit-ad-form">
               <div class="form-group">
                 <label for="edit-ad-name">Ad Name</label>
-                <input type="text" id="edit-ad-name" value="${data.name}" required>
+                <input type="text" id="edit-ad-name" value="${data.name || ''}" required>
               </div>
               
               <div class="form-group">
@@ -753,17 +1022,21 @@ function editAd(adId) {
                 <select id="edit-ad-provider" required>
                   <option value="custom" ${data.provider === 'custom' || !data.provider ? 'selected' : ''}>Custom Ad</option>
                   <option value="adsense" ${data.provider === 'adsense' ? 'selected' : ''}>Google AdSense</option>
+                  <option value="adsterra" ${data.provider === 'adsterra' ? 'selected' : ''}>Adsterra</option>
                   <option value="admanager" ${data.provider === 'admanager' ? 'selected' : ''}>Google Ad Manager</option>
                   <option value="other" ${data.provider === 'other' ? 'selected' : ''}>Other Provider</option>
                 </select>
               </div>
               
-              <div id="custom-ad-fields" style="display: ${data.provider !== 'adsense' && data.provider !== 'admanager' && data.provider !== 'other' ? 'block' : 'none'}">
+              <div id="custom-ad-fields" style="display: ${data.provider !== 'adsense' && data.provider !== 'adsterra' && data.provider !== 'admanager' && data.provider !== 'other' ? 'block' : 'none'}">
                 <div class="form-group">
                   <label for="edit-ad-type">Ad Type</label>
                   <select id="edit-ad-type" required>
-                    <option value="banner" ${data.type === 'banner' ? 'selected' : ''}>Banner</option>
+                    <option value="banner" ${data.type === 'banner' || !data.type ? 'selected' : ''}>Banner</option>
                     <option value="video" ${data.type === 'video' ? 'selected' : ''}>Video</option>
+                    <option value="native" ${data.type === 'native' ? 'selected' : ''}>Native Ad</option>
+                    <option value="interstitial" ${data.type === 'interstitial' ? 'selected' : ''}>Interstitial</option>
+                    <option value="sticky" ${data.type === 'sticky' ? 'selected' : ''}>Sticky Banner</option>
                   </select>
                 </div>
                 
@@ -788,10 +1061,11 @@ function editAd(adId) {
                 </div>
               </div>
               
-              <div id="external-ad-fields" style="display: ${data.provider === 'adsense' || data.provider === 'admanager' || data.provider === 'other' ? 'block' : 'none'}">
+              <div id="external-ad-fields" style="display: ${data.provider === 'adsense' || data.provider === 'adsterra' || data.provider === 'admanager' || data.provider === 'other' ? 'block' : 'none'}">
                 <div class="form-group">
                   <label for="edit-ad-code">Ad Code (Copy and paste provider code)</label>
                   <textarea id="edit-ad-code" rows="5">${data.ad_code || ''}</textarea>
+                  <small>Paste JavaScript ad code from AdSense, Adsterra or other ad providers</small>
                 </div>
               </div>
               
@@ -878,8 +1152,14 @@ function editAd(adId) {
           updatedAd.type = document.getElementById('edit-ad-type').value;
           updatedAd.duration = parseInt(document.getElementById('edit-ad-duration').value) || 30;
           updatedAd.size = document.getElementById('edit-ad-size').value;
+          // Don't clear ad_code if it was already present and external provider before
+          if (provider !== data.provider) {
+            updatedAd.ad_code = null;
+          }
         } else {
           updatedAd.ad_code = document.getElementById('edit-ad-code').value;
+          updatedAd.type = 'external';
+          // Keep file_url even when switching to external ads
         }
         
         try {
@@ -924,244 +1204,35 @@ function editAd(adId) {
           alert(`Failed to update ad: ${error.message}`);
         }
       });
+    })
+    .catch(err => {
+      console.error('Error in edit ad:', err);
+      alert('Error loading ad data. Please try again.');
     });
 }
 
-// Show add ad modal
-function showAddAdModal() {
-  const addAdModal = document.createElement('div');
-  addAdModal.className = 'modal';
-  addAdModal.id = 'add-ad-modal';
-  
-  // Generate placement options
-  let placementOptions = '';
-  if (window.adPlacements) {
-    placementOptions = window.adPlacements.map(p => 
-      `<option value="${p.placement_key}">${p.name}</option>`
-    ).join('');
-  } else {
-    placementOptions = `
-      <option value="header">Header</option>
-      <option value="sidebar">Sidebar</option>
-      <option value="in-content" selected>In-Content</option>
-      <option value="results">Results</option>
-      <option value="footer">Footer</option>
-    `;
-  }
-  
-  addAdModal.innerHTML = `
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2><i class="fas fa-plus-circle"></i> Add New Ad</h2>
-        <span class="close-modal">&times;</span>
-      </div>
-      <div class="modal-body">
-        <form id="add-ad-form">
-          <div class="form-group">
-            <label for="ad-name">Ad Name</label>
-            <input type="text" id="ad-name" placeholder="Enter ad name" required>
-          </div>
-          
-          <div class="form-group">
-            <label for="ad-provider">Ad Provider</label>
-            <select id="ad-provider" required>
-              <option value="custom" selected>Custom Ad</option>
-              <option value="adsense">Google AdSense</option>
-              <option value="admanager">Google Ad Manager</option>
-              <option value="other">Other Provider</option>
-            </select>
-          </div>
-          
-          <div id="custom-ad-fields">
-            <div class="form-group">
-              <label for="ad-type">Ad Type</label>
-              <select id="ad-type" required>
-                <option value="banner" selected>Banner</option>
-                <option value="video">Video</option>
-              </select>
-            </div>
-            
-            <div class="form-group">
-              <label for="ad-duration">Duration (seconds for video ads)</label>
-              <input type="number" id="ad-duration" value="30" min="0">
-            </div>
-            
-            <div class="form-group">
-              <label for="ad-file">Ad File (Image/Video)</label>
-              <input type="file" id="ad-file" accept="image/*" required>
-            </div>
-            
-            <div class="form-group">
-              <label for="ad-size">Ad Size</label>
-              <select id="ad-size">
-                <option value="small">Small (300x250)</option>
-                <option value="medium" selected>Medium (728x90)</option>
-                <option value="large">Large (970x250)</option>
-              </select>
-            </div>
-          </div>
-          
-          <div id="external-ad-fields" style="display: none;">
-            <div class="form-group">
-              <label for="ad-code">Ad Code (Copy and paste provider code)</label>
-              <textarea id="ad-code" rows="5" placeholder="Paste ad code here"></textarea>
-            </div>
-          </div>
-          
-          <div class="form-group">
-            <label for="ad-placement">Ad Placement</label>
-            <select id="ad-placement" required>
-              ${placementOptions}
-            </select>
-          </div>
-          
-          <div class="form-group">
-            <label class="checkbox-container">
-              <input type="checkbox" id="ad-active" checked>
-              <span class="checkmark"></span>
-              Active
-            </label>
-          </div>
-          
-          <button type="submit" class="primary-button">Add Ad</button>
-        </form>
-      </div>
-    </div>
-  `;
-  
-  document.body.appendChild(addAdModal);
-  addAdModal.style.display = 'block';
-  
-  // Add event listeners
-  const closeBtn = addAdModal.querySelector('.close-modal');
-  closeBtn.addEventListener('click', () => {
-    addAdModal.remove();
-  });
-  
-  // Toggle fields based on provider selection
-  const providerSelect = document.getElementById('ad-provider');
-  const customFields = document.getElementById('custom-ad-fields');
-  const externalFields = document.getElementById('external-ad-fields');
-  
-  providerSelect.addEventListener('change', () => {
-    const provider = providerSelect.value;
-    
-    if (provider === 'custom') {
-      customFields.style.display = 'block';
-      externalFields.style.display = 'none';
-    } else {
-      customFields.style.display = 'none';
-      externalFields.style.display = 'block';
-    }
-  });
-  
-  // Handle file type changes
-  const typeSelect = document.getElementById('ad-type');
-  const fileInput = document.getElementById('ad-file');
-  
-  typeSelect.addEventListener('change', () => {
-    fileInput.accept = typeSelect.value === 'video' ? 'video/*' : 'image/*';
-  });
-  
-  const form = document.getElementById('add-ad-form');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const provider = document.getElementById('ad-provider').value;
-    const isCustomAd = provider === 'custom';
-    
-    // Base ad data
-    const newAd = {
-      name: document.getElementById('ad-name').value,
-      provider: provider,
-      placement: document.getElementById('ad-placement').value,
-      active: document.getElementById('ad-active').checked
-    };
-    
-    // Add provider-specific data
-    if (isCustomAd) {
-      newAd.type = document.getElementById('ad-type').value;
-      newAd.duration = parseInt(document.getElementById('ad-duration').value) || 30;
-      newAd.size = document.getElementById('ad-size').value;
-    } else {
-      newAd.ad_code = document.getElementById('ad-code').value;
-    }
-    
-    try {
-      // Insert ad to get the ID
-      const { data: insertedAd, error: insertError } = await supabase
-        .from('ads')
-        .insert([newAd])
-        .select();
-      
-      if (insertError) throw insertError;
-      
-      const adId = insertedAd[0].id;
-      
-      // Handle file upload for custom ads
-      if (isCustomAd) {
-        const fileInput = document.getElementById('ad-file');
-        if (fileInput.files.length > 0) {
-          const file = fileInput.files[0];
-          const fileExt = file.name.split('.').pop();
-          const fileName = `ad_${adId}_${Date.now()}.${fileExt}`;
-          
-          // Upload file to Supabase storage
-          const { data: fileData, error: fileError } = await supabase.storage
-            .from('ad_files')
-            .upload(fileName, file, {
-              cacheControl: '3600',
-              upsert: true
-            });
-          
-          if (fileError) throw fileError;
-          
-          // Get public URL
-          const { data: urlData } = await supabase.storage
-            .from('ad_files')
-            .getPublicUrl(fileName);
-          
-          // Update ad with file URL
-          const { error: updateError } = await supabase
-            .from('ads')
-            .update({ file_url: urlData.publicUrl })
-            .eq('id', adId);
-          
-          if (updateError) throw updateError;
-        }
-      }
-      
-      alert('Ad added successfully');
-      addAdModal.remove();
-      loadAds();  // Refresh ads list
-      
-    } catch (error) {
-      alert(`Failed to add ad: ${error.message}`);
-    }
-  });
-}
-
-// Toggle ad active status
-async function toggleAd(adId, currentActive) {
+// Toggle ad status
+async function toggleAd(adId, isActive) {
   try {
     const { error } = await supabase
       .from('ads')
-      .update({ active: !currentActive })
+      .update({ active: !isActive })
       .eq('id', adId);
     
     if (error) throw error;
     
+    alert(`Ad ${!isActive ? 'activated' : 'deactivated'} successfully`);
     loadAds();
     
   } catch (error) {
-    console.error('Error toggling ad:', error);
-    alert(`Failed to update ad: ${error.message}`);
+    console.error('Error toggling ad status:', error);
+    alert(`Failed to update ad status: ${error.message}`);
   }
 }
 
 // Delete ad
 async function deleteAd(adId) {
-  if (!confirm('Are you sure you want to delete this ad?')) {
+  if (!confirm('Are you sure you want to delete this ad? This action cannot be undone.')) {
     return;
   }
   
@@ -1173,6 +1244,7 @@ async function deleteAd(adId) {
     
     if (error) throw error;
     
+    alert('Ad deleted successfully');
     loadAds();
     
   } catch (error) {
@@ -1181,225 +1253,11 @@ async function deleteAd(adId) {
   }
 }
 
-// Show add ad modal
-function showAddAdModal() {
-  const addAdModal = document.createElement('div');
-  addAdModal.className = 'modal';
-  addAdModal.id = 'add-ad-modal';
-  
-  // Generate placement options
-  let placementOptions = '';
-  if (window.adPlacements) {
-    placementOptions = window.adPlacements.map(p => 
-      `<option value="${p.placement_key}">${p.name}</option>`
-    ).join('');
-  } else {
-    placementOptions = `
-      <option value="header">Header</option>
-      <option value="sidebar">Sidebar</option>
-      <option value="in-content" selected>In-Content</option>
-      <option value="results">Results</option>
-      <option value="footer">Footer</option>
-    `;
-  }
-  
-  addAdModal.innerHTML = `
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2><i class="fas fa-plus-circle"></i> Add New Ad</h2>
-        <span class="close-modal">&times;</span>
-      </div>
-      <div class="modal-body">
-        <form id="add-ad-form">
-          <div class="form-group">
-            <label for="ad-name">Ad Name</label>
-            <input type="text" id="ad-name" placeholder="Enter ad name" required>
-          </div>
-          
-          <div class="form-group">
-            <label for="ad-provider">Ad Provider</label>
-            <select id="ad-provider" required>
-              <option value="custom" selected>Custom Ad</option>
-              <option value="adsense">Google AdSense</option>
-              <option value="admanager">Google Ad Manager</option>
-              <option value="other">Other Provider</option>
-            </select>
-          </div>
-          
-          <div id="custom-ad-fields">
-            <div class="form-group">
-              <label for="ad-type">Ad Type</label>
-              <select id="ad-type" required>
-                <option value="banner" selected>Banner</option>
-                <option value="video">Video</option>
-              </select>
-            </div>
-            
-            <div class="form-group">
-              <label for="ad-duration">Duration (seconds for video ads)</label>
-              <input type="number" id="ad-duration" value="30" min="0">
-            </div>
-            
-            <div class="form-group">
-              <label for="ad-file">Ad File (Image/Video)</label>
-              <input type="file" id="ad-file" accept="image/*" required>
-            </div>
-            
-            <div class="form-group">
-              <label for="ad-size">Ad Size</label>
-              <select id="ad-size">
-                <option value="small">Small (300x250)</option>
-                <option value="medium" selected>Medium (728x90)</option>
-                <option value="large">Large (970x250)</option>
-              </select>
-            </div>
-          </div>
-          
-          <div id="external-ad-fields" style="display: none;">
-            <div class="form-group">
-              <label for="ad-code">Ad Code (Copy and paste provider code)</label>
-              <textarea id="ad-code" rows="5" placeholder="Paste ad code here"></textarea>
-            </div>
-          </div>
-          
-          <div class="form-group">
-            <label for="ad-placement">Ad Placement</label>
-            <select id="ad-placement" required>
-              ${placementOptions}
-            </select>
-          </div>
-          
-          <div class="form-group">
-            <label class="checkbox-container">
-              <input type="checkbox" id="ad-active" checked>
-              <span class="checkmark"></span>
-              Active
-            </label>
-          </div>
-          
-          <button type="submit" class="primary-button">Add Ad</button>
-        </form>
-      </div>
-    </div>
-  `;
-  
-  document.body.appendChild(addAdModal);
-  addAdModal.style.display = 'block';
-  
-  // Add event listeners
-  const closeBtn = addAdModal.querySelector('.close-modal');
-  closeBtn.addEventListener('click', () => {
-    addAdModal.remove();
-  });
-  
-  // Toggle fields based on provider selection
-  const providerSelect = document.getElementById('ad-provider');
-  const customFields = document.getElementById('custom-ad-fields');
-  const externalFields = document.getElementById('external-ad-fields');
-  
-  providerSelect.addEventListener('change', () => {
-    const provider = providerSelect.value;
-    
-    if (provider === 'custom') {
-      customFields.style.display = 'block';
-      externalFields.style.display = 'none';
-    } else {
-      customFields.style.display = 'none';
-      externalFields.style.display = 'block';
-    }
-  });
-  
-  // Handle file type changes
-  const typeSelect = document.getElementById('ad-type');
-  const fileInput = document.getElementById('ad-file');
-  
-  typeSelect.addEventListener('change', () => {
-    fileInput.accept = typeSelect.value === 'video' ? 'video/*' : 'image/*';
-  });
-  
-  const form = document.getElementById('add-ad-form');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const provider = document.getElementById('ad-provider').value;
-    const isCustomAd = provider === 'custom';
-    
-    // Base ad data
-    const newAd = {
-      name: document.getElementById('ad-name').value,
-      provider: provider,
-      placement: document.getElementById('ad-placement').value,
-      active: document.getElementById('ad-active').checked
-    };
-    
-    // Add provider-specific data
-    if (isCustomAd) {
-      newAd.type = document.getElementById('ad-type').value;
-      newAd.duration = parseInt(document.getElementById('ad-duration').value) || 30;
-      newAd.size = document.getElementById('ad-size').value;
-    } else {
-      newAd.ad_code = document.getElementById('ad-code').value;
-    }
-    
-    try {
-      // Insert ad to get the ID
-      const { data: insertedAd, error: insertError } = await supabase
-        .from('ads')
-        .insert([newAd])
-        .select();
-      
-      if (insertError) throw insertError;
-      
-      const adId = insertedAd[0].id;
-      
-      // Handle file upload for custom ads
-      if (isCustomAd) {
-        const fileInput = document.getElementById('ad-file');
-        if (fileInput.files.length > 0) {
-          const file = fileInput.files[0];
-          const fileExt = file.name.split('.').pop();
-          const fileName = `ad_${adId}_${Date.now()}.${fileExt}`;
-          
-          // Upload file to Supabase storage
-          const { data: fileData, error: fileError } = await supabase.storage
-            .from('ad_files')
-            .upload(fileName, file, {
-              cacheControl: '3600',
-              upsert: true
-            });
-          
-          if (fileError) throw fileError;
-          
-          // Get public URL
-          const { data: urlData } = await supabase.storage
-            .from('ad_files')
-            .getPublicUrl(fileName);
-          
-          // Update ad with file URL
-          const { error: updateError } = await supabase
-            .from('ads')
-            .update({ file_url: urlData.publicUrl })
-            .eq('id', adId);
-          
-          if (updateError) throw updateError;
-        }
-      }
-      
-      alert('Ad added successfully');
-      addAdModal.remove();
-      loadAds();  // Refresh ads list
-      
-    } catch (error) {
-      alert(`Failed to add ad: ${error.message}`);
-    }
-  });
-}
-
-// Add placement manager
+// Show placement manager modal
 function showPlacementManagerModal() {
   const placementModal = document.createElement('div');
   placementModal.className = 'modal';
-  placementModal.id = 'placement-manager-modal';
+  placementModal.id = 'placement-modal';
   
   placementModal.innerHTML = `
     <div class="modal-content">
@@ -1408,48 +1266,40 @@ function showPlacementManagerModal() {
         <span class="close-modal">&times;</span>
       </div>
       <div class="modal-body">
-        <div class="action-buttons">
-          <button id="add-placement-button" class="primary-button">
-            <i class="fas fa-plus"></i> Add New Placement
-          </button>
-        </div>
+        <div id="placement-error" class="form-error" style="display: none;"></div>
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Key</th>
+              <th>Description</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="placements-table-body">
+            <tr>
+              <td colspan="4" class="text-center">Loading placements...</td>
+            </tr>
+          </tbody>
+        </table>
         
-        <div id="placements-list">
-          <table class="admin-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Key</th>
-                <th>Description</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="placements-table-body">
-              <!-- Placements will be loaded here -->
-            </tbody>
-          </table>
-        </div>
-        
-        <div id="add-placement-form" style="display: none;">
+        <div style="margin-top: 1.5rem;">
           <h3>Add New Placement</h3>
-          <form id="placement-form">
+          <form id="add-placement-form">
             <div class="form-group">
               <label for="placement-name">Placement Name</label>
-              <input type="text" id="placement-name" required>
+              <input type="text" id="placement-name" placeholder="e.g. Sidebar Top" required>
             </div>
             <div class="form-group">
-              <label for="placement-key">Placement Key (unique identifier)</label>
-              <input type="text" id="placement-key" required pattern="[a-z0-9-_]+">
-              <small>Use only lowercase letters, numbers, hyphens, and underscores</small>
+              <label for="placement-key">Placement Key</label>
+              <input type="text" id="placement-key" placeholder="e.g. sidebar-top" required>
+              <small>Use only lowercase letters, numbers, and hyphens</small>
             </div>
             <div class="form-group">
               <label for="placement-description">Description</label>
-              <textarea id="placement-description" rows="3"></textarea>
+              <textarea id="placement-description" placeholder="Describe where this placement appears"></textarea>
             </div>
-            <div class="form-actions">
-              <button type="button" id="cancel-placement" class="secondary-button">Cancel</button>
-              <button type="submit" class="primary-button">Save Placement</button>
-            </div>
+            <button type="submit" class="primary-button">Add Placement</button>
           </form>
         </div>
       </div>
@@ -1459,94 +1309,76 @@ function showPlacementManagerModal() {
   document.body.appendChild(placementModal);
   placementModal.style.display = 'block';
   
+  // Load placements
+  loadPlacements();
+  
   // Add event listeners
   const closeBtn = placementModal.querySelector('.close-modal');
   closeBtn.addEventListener('click', () => {
     placementModal.remove();
   });
   
-  // Load placements
-  loadPlacements();
-  
-  // Add placement button
-  document.getElementById('add-placement-button').addEventListener('click', () => {
-    document.getElementById('placements-list').style.display = 'none';
-    document.getElementById('add-placement-button').style.display = 'none';
-    document.getElementById('add-placement-form').style.display = 'block';
-  });
-  
-  // Cancel button
-  document.getElementById('cancel-placement').addEventListener('click', () => {
-    document.getElementById('placements-list').style.display = 'block';
-    document.getElementById('add-placement-button').style.display = 'block';
-    document.getElementById('add-placement-form').style.display = 'none';
-  });
-  
-  // Form submission
-  document.getElementById('placement-form').addEventListener('submit', async (e) => {
+  // Add placement form submission
+  const form = document.getElementById('add-placement-form');
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
     
-    const newPlacement = {
-      name: document.getElementById('placement-name').value,
-      placement_key: document.getElementById('placement-key').value,
-      description: document.getElementById('placement-description').value
-    };
+    const name = document.getElementById('placement-name').value;
+    const key = document.getElementById('placement-key').value;
+    const description = document.getElementById('placement-description').value;
     
     try {
       const { error } = await supabase
         .from('ad_placements')
-        .insert([newPlacement]);
+        .insert([{ name, placement_key: key, description }]);
       
       if (error) throw error;
       
       alert('Placement added successfully');
-      
-      // Reset and reload
-      document.getElementById('placement-name').value = '';
-      document.getElementById('placement-key').value = '';
-      document.getElementById('placement-description').value = '';
-      
-      document.getElementById('placements-list').style.display = 'block';
-      document.getElementById('add-placement-button').style.display = 'block';
-      document.getElementById('add-placement-form').style.display = 'none';
-      
+      form.reset();
       loadPlacements();
       
     } catch (error) {
-      alert(`Failed to add placement: ${error.message}`);
+      console.error('Error adding placement:', error);
+      
+      const errorElem = document.getElementById('placement-error');
+      errorElem.textContent = `Failed to add placement: ${error.message}`;
+      errorElem.style.display = 'block';
     }
   });
 }
 
-// Load placements
+// Load ad placements
 async function loadPlacements() {
+  const tableBody = document.getElementById('placements-table-body');
+  if (!tableBody) return;
+  
   try {
+    // First check if the table exists
+    const { data: tableInfo, error: tableError } = await supabase
+      .from('ad_placements')
+      .select('*', { count: 'exact', head: true });
+    
+    if (tableError && tableError.code === 'PGRST116') {
+      // Table doesn't exist, create it
+      await supabase.rpc('create_ad_placements_table');
+      tableBody.innerHTML = '<tr><td colspan="4" class="text-center">Creating placements table. Please try again.</td></tr>';
+      return;
+    }
+    
     const { data, error } = await supabase
       .from('ad_placements')
       .select('*')
       .order('name');
     
-    if (error) {
-      console.error('Error loading placements:', error);
-      alert('Error loading placements: ' + error.message);
-      return;
-    }
-    
-    // Store placements globally for other functions to use
-    window.adPlacements = data || [];
-    
-    const tableBody = document.getElementById('placements-table-body');
-    if (!tableBody) {
-      console.error('Placements table body not found');
-      return;
-    }
+    if (error) throw error;
     
     tableBody.innerHTML = '';
     
     if (!data || data.length === 0) {
       tableBody.innerHTML = `
         <tr>
-          <td colspan="4" class="text-center">No placements found</td>
+          <td colspan="4" class="text-center">No placements found. Add your first placement.</td>
         </tr>
       `;
       return;
@@ -1557,7 +1389,7 @@ async function loadPlacements() {
       row.innerHTML = `
         <td>${placement.name}</td>
         <td><code>${placement.placement_key}</code></td>
-        <td>${placement.description || ''}</td>
+        <td>${placement.description || 'No description'}</td>
         <td>
           <button class="action-btn edit-placement" data-id="${placement.id}">
             <i class="fas fa-edit"></i>
@@ -1567,6 +1399,7 @@ async function loadPlacements() {
           </button>
         </td>
       `;
+      
       tableBody.appendChild(row);
     });
     
@@ -1580,77 +1413,102 @@ async function loadPlacements() {
     });
     
   } catch (error) {
-    console.error('Error in loadPlacements:', error);
-    alert('Failed to load placements. Please try again.');
+    console.error('Error loading placements:', error);
+    
+    if (tableBody) {
+      tableBody.innerHTML = `
+        <tr>
+          <td colspan="4" class="text-center">Failed to load placements: ${error.message}</td>
+        </tr>
+      `;
+    }
   }
 }
 
 // Edit placement
-async function editPlacement(placementId) {
+async function editPlacement(id) {
   try {
     const { data, error } = await supabase
       .from('ad_placements')
       .select('*')
-      .eq('id', placementId)
+      .eq('id', id)
       .single();
     
     if (error) throw error;
     
-    // Switch to edit form
-    document.getElementById('placements-list').style.display = 'none';
-    document.getElementById('add-placement-button').style.display = 'none';
-    document.getElementById('add-placement-form').style.display = 'block';
+    const editModal = document.createElement('div');
+    editModal.className = 'modal';
+    editModal.id = 'edit-placement-modal';
     
-    // Fill form with data
-    document.getElementById('placement-name').value = data.name;
-    document.getElementById('placement-key').value = data.placement_key;
-    document.getElementById('placement-description').value = data.description || '';
+    editModal.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2><i class="fas fa-edit"></i> Edit Placement</h2>
+          <span class="close-modal">&times;</span>
+        </div>
+        <div class="modal-body">
+          <form id="edit-placement-form">
+            <div class="form-group">
+              <label for="edit-placement-name">Placement Name</label>
+              <input type="text" id="edit-placement-name" value="${data.name}" required>
+            </div>
+            <div class="form-group">
+              <label for="edit-placement-key">Placement Key</label>
+              <input type="text" id="edit-placement-key" value="${data.placement_key}" readonly>
+              <small>Key cannot be changed to maintain consistency</small>
+            </div>
+            <div class="form-group">
+              <label for="edit-placement-description">Description</label>
+              <textarea id="edit-placement-description">${data.description || ''}</textarea>
+            </div>
+            <button type="submit" class="primary-button">Save Changes</button>
+          </form>
+        </div>
+      </div>
+    `;
     
-    // Update form for edit mode
-    const form = document.getElementById('placement-form');
-    form.innerHTML += `<input type="hidden" id="placement-id" value="${placementId}">`;
+    document.body.appendChild(editModal);
+    editModal.style.display = 'block';
     
-    // Replace submit handler
-    form.onsubmit = async (e) => {
+    // Add event listeners
+    const closeBtn = editModal.querySelector('.close-modal');
+    closeBtn.addEventListener('click', () => {
+      editModal.remove();
+    });
+    
+    const form = document.getElementById('edit-placement-form');
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       
-      const updatedPlacement = {
-        name: document.getElementById('placement-name').value,
-        placement_key: document.getElementById('placement-key').value,
-        description: document.getElementById('placement-description').value
-      };
+      const name = document.getElementById('edit-placement-name').value;
+      const description = document.getElementById('edit-placement-description').value;
       
       try {
         const { error } = await supabase
           .from('ad_placements')
-          .update(updatedPlacement)
-          .eq('id', placementId);
+          .update({ name, description })
+          .eq('id', id);
         
         if (error) throw error;
         
         alert('Placement updated successfully');
-        
-        // Reset and reload
-        document.getElementById('placements-list').style.display = 'block';
-        document.getElementById('add-placement-button').style.display = 'block';
-        document.getElementById('add-placement-form').style.display = 'none';
-        
+        editModal.remove();
         loadPlacements();
         
       } catch (error) {
+        console.error('Error updating placement:', error);
         alert(`Failed to update placement: ${error.message}`);
       }
-    };
-    
+    });
   } catch (error) {
-    console.error('Error loading placement:', error);
-    alert('Failed to load placement details. Please try again.');
+    console.error('Error editing placement:', error);
+    alert(`Error: ${error.message}`);
   }
 }
 
 // Delete placement
-async function deletePlacement(placementId) {
-  if (!confirm('Are you sure you want to delete this placement? Ads using this placement will need to be reassigned.')) {
+async function deletePlacement(id) {
+  if (!confirm('Are you sure you want to delete this placement? This may affect ads using this placement.')) {
     return;
   }
   
@@ -1658,7 +1516,7 @@ async function deletePlacement(placementId) {
     const { error } = await supabase
       .from('ad_placements')
       .delete()
-      .eq('id', placementId);
+      .eq('id', id);
     
     if (error) throw error;
     
@@ -1668,74 +1526,6 @@ async function deletePlacement(placementId) {
   } catch (error) {
     console.error('Error deleting placement:', error);
     alert(`Failed to delete placement: ${error.message}`);
-  }
-}
-
-// Load system settings
-async function loadSettings() {
-  try {
-    const { data, error } = await supabase
-      .from('system_settings')
-      .select('*')
-      .single();
-    
-    if (error && error.code !== 'PGRST116') throw error;
-    
-    if (data) {
-      document.getElementById('free-scans').value = data.free_scans_per_day;
-      document.getElementById('ad-duration').value = data.ad_unlock_hours;
-      document.getElementById('enable-ads').checked = data.ads_enabled;
-      document.getElementById('enable-registration').checked = data.registration_enabled;
-    }
-    
-  } catch (error) {
-    console.error('Error loading settings:', error);
-    alert('Failed to load system settings. Please try again.');
-  }
-}
-
-// Save system settings
-async function saveSettings(e) {
-  e.preventDefault();
-  
-  const settings = {
-    free_scans_per_day: parseInt(document.getElementById('free-scans').value),
-    ad_unlock_hours: parseInt(document.getElementById('ad-duration').value),
-    ads_enabled: document.getElementById('enable-ads').checked,
-    registration_enabled: document.getElementById('enable-registration').checked
-  };
-  
-  try {
-    // Check if settings exist
-    const { data, error } = await supabase
-      .from('system_settings')
-      .select('id')
-      .single();
-    
-    if (error && error.code !== 'PGRST116') throw error;
-    
-    let result;
-    
-    if (data) {
-      // Update existing settings
-      result = await supabase
-        .from('system_settings')
-        .update(settings)
-        .eq('id', data.id);
-    } else {
-      // Insert new settings
-      result = await supabase
-        .from('system_settings')
-        .insert([{ ...settings, id: 1 }]);
-    }
-    
-    if (result.error) throw result.error;
-    
-    alert('Settings saved successfully');
-    
-  } catch (error) {
-    console.error('Error saving settings:', error);
-    alert(`Failed to save settings: ${error.message}`);
   }
 }
 
@@ -2067,6 +1857,74 @@ function sendMassNotification() {
     alert(`Notification sent to all users:\nTitle: ${title}\nMessage: ${message}\nType: ${type}`);
     notificationModal.remove();
   });
+}
+
+// Load system settings
+async function loadSettings() {
+  try {
+    const { data, error } = await supabase
+      .from('system_settings')
+      .select('*')
+      .single();
+    
+    if (error && error.code !== 'PGRST116') throw error;
+    
+    if (data) {
+      document.getElementById('free-scans').value = data.free_scans_per_day;
+      document.getElementById('ad-duration').value = data.ad_unlock_hours;
+      document.getElementById('enable-ads').checked = data.ads_enabled;
+      document.getElementById('enable-registration').checked = data.registration_enabled;
+    }
+    
+  } catch (error) {
+    console.error('Error loading settings:', error);
+    alert('Failed to load system settings. Please try again.');
+  }
+}
+
+// Save system settings
+async function saveSettings(e) {
+  e.preventDefault();
+  
+  const settings = {
+    free_scans_per_day: parseInt(document.getElementById('free-scans').value),
+    ad_unlock_hours: parseInt(document.getElementById('ad-duration').value),
+    ads_enabled: document.getElementById('enable-ads').checked,
+    registration_enabled: document.getElementById('enable-registration').checked
+  };
+  
+  try {
+    // Check if settings exist
+    const { data, error } = await supabase
+      .from('system_settings')
+      .select('id')
+      .single();
+    
+    if (error && error.code !== 'PGRST116') throw error;
+    
+    let result;
+    
+    if (data) {
+      // Update existing settings
+      result = await supabase
+        .from('system_settings')
+        .update(settings)
+        .eq('id', data.id);
+    } else {
+      // Insert new settings
+      result = await supabase
+        .from('system_settings')
+        .insert([{ ...settings, id: 1 }]);
+    }
+    
+    if (result.error) throw result.error;
+    
+    alert('Settings saved successfully');
+    
+  } catch (error) {
+    console.error('Error saving settings:', error);
+    alert(`Failed to save settings: ${error.message}`);
+  }
 }
 
 // Export admin functionality

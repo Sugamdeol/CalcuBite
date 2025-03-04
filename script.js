@@ -1469,6 +1469,44 @@ If the user asks about something not related to nutrition or health, politely re
   }
 }
 
+// Function to populate profile modal with data
+function populateProfileModal() {
+  const nameInput = document.getElementById('profile-name');
+  const emailInput = document.getElementById('profile-email');
+  const planInput = document.getElementById('profile-plan');
+  const avatarImg = document.getElementById('profile-avatar-img');
+  const freePlan = document.getElementById('free-plan');
+  const proPlan = document.getElementById('pro-plan');
+  const currentPlanBtn = document.getElementById('current-plan-btn');
+  const upgradePlanBtn = document.getElementById('upgrade-plan-btn');
+  
+  // Check if essential elements exist before proceeding
+  if (!nameInput || !emailInput) {
+    console.error('Essential profile elements not found');
+    return;
+  }
+  
+  // Fill profile data
+  const userProfile = window.auth.userProfile();
+  const currentUser = window.auth.currentUser();
+  
+  nameInput.value = userProfile?.full_name || '';
+  emailInput.value = currentUser?.email || '';
+  if (planInput) planInput.value = 'Free';
+  
+  if (userProfile?.avatar_url) {
+    avatarImg.src = userProfile.avatar_url;
+  } else {
+    avatarImg.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(nameInput.value)}&background=random`;
+  }
+
+  // Update ad rewards text
+  const adRewardDesc = document.querySelector('.ad-setting-item:nth-child(2) p');
+  if (adRewardDesc) {
+    adRewardDesc.textContent = 'Watching an ad unlocks unlimited scans for 24 hours.';
+  }
+}
+
 // Theme toggle functionality
 function toggleTheme() {
   const body = document.body;
@@ -1485,7 +1523,7 @@ function toggleTheme() {
   }
 }
 
-// Function to load and display ads
+// Load ads
 async function loadAds() {
   try {
     // Get active ads for each placement
@@ -1547,11 +1585,37 @@ async function loadAds() {
           // Log impression
           logAdImpression(ad.id);
           
-        } else if (ad.provider === 'adsense' || ad.provider === 'admanager' || ad.provider === 'other') {
-          // Display ad from external provider
-          container.innerHTML = ad.ad_code || '';
+        } else if (ad.ad_code) {
+          // Display ad from external provider using ad code
+          const adWrapper = document.createElement('div');
+          adWrapper.className = 'external-ad-wrapper';
+          adWrapper.dataset.adId = ad.id;
           
-          // Log impression (if not automatically tracked by the provider)
+          // Insert the ad code safely
+          adWrapper.innerHTML = ad.ad_code;
+          
+          // Clear and append
+          container.innerHTML = '';
+          container.appendChild(adWrapper);
+          
+          // Execute any scripts in the ad code
+          const scripts = adWrapper.querySelectorAll('script');
+          scripts.forEach(oldScript => {
+            const newScript = document.createElement('script');
+            
+            // Copy all attributes
+            Array.from(oldScript.attributes).forEach(attr => {
+              newScript.setAttribute(attr.name, attr.value);
+            });
+            
+            // Copy inline script content
+            newScript.textContent = oldScript.textContent;
+            
+            // Replace old script with new one to execute it
+            oldScript.parentNode.replaceChild(newScript, oldScript);
+          });
+          
+          // Log impression
           logAdImpression(ad.id);
         }
       });
