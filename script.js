@@ -6,6 +6,7 @@ let analysisData = null;
 let isCameraOn = false;
 let stream = null;
 let chartInstance = null;
+let userDashboardData = null;
 
 // DOM elements
 const video = document.getElementById('video');
@@ -560,7 +561,7 @@ Your response MUST be valid JSON with this structure:
         ]
       }
     ],
-    model: "openai",
+    model: "openai-large",
     jsonMode: true,
     private: true
   };
@@ -1400,7 +1401,7 @@ ${analysisData ? 'The user has just scanned a food item with the following analy
 Be helpful, accurate, and provide evidence-based advice. Keep answers concise but informative.
 If the user asks about something not related to nutrition or health, politely redirect them.`;
 
-    // Prepare messages for the AI chat
+    // Prepare messages for the API chat
     let messages = [
       {
         role: "system",
@@ -1415,7 +1416,7 @@ If the user asks about something not related to nutrition or health, politely re
     
     messages = [...messages, ...conversationHistory];
     
-    // Make the AI call
+    // Make the API call
     const completion = await websim.chat.completions.create({
       messages: messages
     });
@@ -1469,43 +1470,451 @@ If the user asks about something not related to nutrition or health, politely re
   }
 }
 
-// Function to populate profile modal with data
-function populateProfileModal() {
-  const nameInput = document.getElementById('profile-name');
-  const emailInput = document.getElementById('profile-email');
-  const planInput = document.getElementById('profile-plan');
-  const avatarImg = document.getElementById('profile-avatar-img');
-  const freePlan = document.getElementById('free-plan');
-  const proPlan = document.getElementById('pro-plan');
-  const currentPlanBtn = document.getElementById('current-plan-btn');
-  const upgradePlanBtn = document.getElementById('upgrade-plan-btn');
-  
-  // Check if essential elements exist before proceeding
-  if (!nameInput || !emailInput) {
-    console.error('Essential profile elements not found');
-    return;
-  }
-  
-  // Fill profile data
-  const userProfile = window.auth.userProfile();
-  const currentUser = window.auth.currentUser();
-  
-  nameInput.value = userProfile?.full_name || '';
-  emailInput.value = currentUser?.email || '';
-  if (planInput) planInput.value = 'Free';
-  
-  if (userProfile?.avatar_url) {
-    avatarImg.src = userProfile.avatar_url;
-  } else {
-    avatarImg.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(nameInput.value)}&background=random`;
-  }
-
-  // Update ad rewards text
-  const adRewardDesc = document.querySelector('.ad-setting-item:nth-child(2) p');
-  if (adRewardDesc) {
-    adRewardDesc.textContent = 'Watching an ad unlocks unlimited scans for 24 hours.';
+// Function to show user dashboard
+async function showDashboard() {
+  try {
+    // Check if user is authenticated
+    if (!window.auth || !window.auth.currentUser()) {
+      alert('Please log in to view your dashboard');
+      return;
+    }
+    
+    // Create the dashboard modal
+    const dashboardModal = document.createElement('div');
+    dashboardModal.className = 'modal';
+    dashboardModal.id = 'dashboard-modal';
+    
+    // Fetch user scan history
+    await fetchUserDashboardData();
+    
+    // Create dashboard content
+    dashboardModal.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2><i class="fas fa-tachometer-alt"></i> Your Dashboard</h2>
+          <span class="close-modal">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div class="dashboard-content">
+            <div class="dashboard-overview">
+              <div class="dashboard-stats">
+                <div class="stat-card">
+                  <div class="stat-icon"><i class="fas fa-camera"></i></div>
+                  <div class="stat-data">
+                    <h4>Total Scans</h4>
+                    <p>${userDashboardData?.scans?.length || 0}</p>
+                  </div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-icon"><i class="fas fa-calendar-check"></i></div>
+                  <div class="stat-data">
+                    <h4>Scans Today</h4>
+                    <p>${countScansToday()}</p>
+                  </div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-icon"><i class="fas fa-battery-three-quarters"></i></div>
+                  <div class="stat-data">
+                    <h4>Scans Remaining</h4>
+                    <p>${window.auth.userProfile()?.scans_remaining || 0}</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="chart-container dashboard-chart">
+                <canvas id="scan-history-chart"></canvas>
+              </div>
+            </div>
+            
+            <div class="dashboard-section">
+              <h3><i class="fas fa-history"></i> Recent Scans</h3>
+              <div class="recent-scans">
+                ${renderRecentScans()}
+              </div>
+            </div>
+            
+            <div class="dashboard-section">
+              <h3><i class="fas fa-bullseye"></i> Health Goals</h3>
+              <div class="health-goals">
+                <div class="empty-state">
+                  <i class="fas fa-flag"></i>
+                  <p>You haven't set any health goals yet.</p>
+                  <button class="secondary-button" id="add-goal-btn">
+                    <i class="fas fa-plus"></i> Add Health Goal
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // Add the modal to the DOM
+    document.body.appendChild(dashboardModal);
+    dashboardModal.style.display = 'block';
+    
+    // Add event listeners
+    const closeBtn = dashboardModal.querySelector('.close-modal');
+    closeBtn.addEventListener('click', () => {
+      dashboardModal.remove();
+    });
+    
+    // Close modal when clicking outside
+    dashboardModal.addEventListener('click', (e) => {
+      if (e.target === dashboardModal) {
+        dashboardModal.remove();
+      }
+    });
+    
+    // Add goal button
+    const addGoalBtn = document.getElementById('add-goal-btn');
+    if (addGoalBtn) {
+      addGoalBtn.addEventListener('click', () => {
+        alert('Health goals feature coming soon!');
+      });
+    }
+    
+    // Create scan history chart
+    createScanHistoryChart();
+    
+  } catch (error) {
+    console.error('Error showing dashboard:', error);
+    alert('Failed to load dashboard. Please try again.');
   }
 }
+
+// Fetch user dashboard data
+async function fetchUserDashboardData() {
+  if (!window.auth.currentUser()) return;
+  
+  try {
+    // Fetch user scan history
+    const { data, error } = await supabase
+      .from('scan_history')
+      .select('*')
+      .eq('user_id', window.auth.currentUser().id)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    userDashboardData = {
+      scans: data || []
+    };
+    
+  } catch (error) {
+    console.error('Error fetching dashboard data:', error);
+    userDashboardData = { scans: [] };
+  }
+}
+
+// Count scans performed today
+function countScansToday() {
+  if (!userDashboardData?.scans) return 0;
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  return userDashboardData.scans.filter(scan => {
+    const scanDate = new Date(scan.created_at);
+    return scanDate >= today;
+  }).length;
+}
+
+// Render recent scans
+function renderRecentScans() {
+  if (!userDashboardData?.scans || userDashboardData.scans.length === 0) {
+    return `
+      <div class="empty-state">
+        <i class="fas fa-camera-retro"></i>
+        <p>You haven't performed any scans yet.</p>
+        <button class="secondary-button" id="start-scanning-btn">
+          <i class="fas fa-camera"></i> Start Scanning
+        </button>
+      </div>
+    `;
+  }
+  
+  const recentScans = userDashboardData.scans.slice(0, 5);
+  return `
+    <div class="scans-list">
+      ${recentScans.map(scan => {
+        const scanDate = new Date(scan.created_at).toLocaleString();
+        const scanType = scan.scan_type.charAt(0).toUpperCase() + scan.scan_type.slice(1);
+        const rating = scan.scan_data?.rating || 'N/A';
+        
+        return `
+          <div class="scan-item">
+            <div class="scan-icon">
+              <i class="fas fa-${scan.scan_type === 'label' ? 'tag' : scan.scan_type === 'food' ? 'utensils' : 'dumbbell'}"></i>
+            </div>
+            <div class="scan-details">
+              <h4>${scanType} Scan</h4>
+              <p class="scan-date">${scanDate}</p>
+            </div>
+            <div class="scan-rating" style="color: ${rating >= 7 ? 'var(--success)' : (rating >= 4 ? 'var(--warning)' : 'var(--danger)')}">
+              ${rating}/10
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+// Create scan history chart
+function createScanHistoryChart() {
+  const chartCanvas = document.getElementById('scan-history-chart');
+  if (!chartCanvas) return;
+  
+  // Group scan data by date
+  const scansByDate = {};
+  
+  if (userDashboardData?.scans) {
+    // Consider only the last 14 days
+    const dateLabels = [];
+    for (let i = 13; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      dateLabels.push(dateStr);
+      scansByDate[dateStr] = 0;
+    }
+    
+    // Count scans by date
+    userDashboardData.scans.forEach(scan => {
+      const dateStr = new Date(scan.created_at).toISOString().split('T')[0];
+      if (scansByDate[dateStr] !== undefined) {
+        scansByDate[dateStr]++;
+      }
+    });
+    
+    // Convert object to arrays for Chart.js
+    const labels = Object.keys(scansByDate).sort();
+    const data = labels.map(date => scansByDate[date]);
+    
+    // Format labels for display (e.g., "Apr 15")
+    const formattedLabels = labels.map(date => {
+      const d = new Date(date);
+      return `${d.toLocaleString('default', { month: 'short' })} ${d.getDate()}`;
+    });
+    
+    new Chart(chartCanvas, {
+      type: 'line',
+      data: {
+        labels: formattedLabels,
+        datasets: [{
+          label: 'Scans',
+          data: data,
+          backgroundColor: 'rgba(79, 70, 229, 0.2)',
+          borderColor: 'rgba(79, 70, 229, 1)',
+          tension: 0.4,
+          fill: true,
+          pointBackgroundColor: 'rgba(79, 70, 229, 1)',
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: false
+          },
+          title: {
+            display: true,
+            text: 'Scan Activity (Last 14 Days)'
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              precision: 0
+            }
+          },
+          x: {
+            grid: {
+              display: false
+            }
+          }
+        }
+      }
+    });
+  }
+}
+
+// Initialize event listeners
+document.addEventListener('DOMContentLoaded', () => {
+  // Show landing page for unauthenticated users
+  const isAuthenticated = window.auth && window.auth.currentUser();
+  const landingPage = document.getElementById('landing-page');
+  const appContainer = document.getElementById('app-container');
+  const authContainer = document.getElementById('auth-container');
+  
+  if (!isAuthenticated && landingPage) {
+    landingPage.style.display = 'block';
+    appContainer.style.display = 'none';
+    authContainer.style.display = 'none';
+    document.body.classList.add('landing-mode');
+    
+    // Mobile menu functionality
+    const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+    const landingNav = document.querySelector('.landing-nav');
+    
+    if (mobileMenuToggle) {
+      mobileMenuToggle.addEventListener('click', () => {
+        landingNav.classList.toggle('show');
+        mobileMenuToggle.querySelector('i').classList.toggle('fa-bars');
+        mobileMenuToggle.querySelector('i').classList.toggle('fa-times');
+      });
+      
+      // Close menu when clicking navigation items
+      const navLinks = landingNav.querySelectorAll('a');
+      navLinks.forEach(link => {
+        link.addEventListener('click', () => {
+          landingNav.classList.remove('show');
+          mobileMenuToggle.querySelector('i').classList.remove('fa-times');
+          mobileMenuToggle.querySelector('i').classList.add('fa-bars');
+        });
+      });
+    }
+  }
+  
+  // Add landing page auth navigation
+  const landingLoginBtn = document.getElementById('landing-login-btn');
+  const landingSignupBtn = document.getElementById('landing-signup-btn');
+  const heroSignupBtn = document.getElementById('hero-signup-btn');
+  const ctaSignupBtn = document.getElementById('cta-signup-btn');
+  
+  if (landingLoginBtn) {
+    landingLoginBtn.addEventListener('click', () => {
+      showLoginForm();
+      document.getElementById('landing-page').style.display = 'none';
+      document.getElementById('auth-container').style.display = 'flex';
+    });
+  }
+  
+  if (landingSignupBtn) {
+    landingSignupBtn.addEventListener('click', () => {
+      showRegisterForm();
+      document.getElementById('landing-page').style.display = 'none';
+      document.getElementById('auth-container').style.display = 'flex';
+    });
+  }
+  
+  if (heroSignupBtn) {
+    heroSignupBtn.addEventListener('click', () => {
+      showRegisterForm();
+      document.getElementById('landing-page').style.display = 'none';
+      document.getElementById('auth-container').style.display = 'flex';
+    });
+  }
+  
+  if (ctaSignupBtn) {
+    ctaSignupBtn.addEventListener('click', () => {
+      showRegisterForm();
+      document.getElementById('landing-page').style.display = 'none';
+      document.getElementById('auth-container').style.display = 'flex';
+    });
+  }
+  
+  // Handle demo button click
+  const demoBtn = document.getElementById('hero-demo-btn');
+  if (demoBtn) {
+    demoBtn.addEventListener('click', () => {
+      // You can show a demo video modal here
+      alert('Demo functionality coming soon!');
+    });
+  }
+  
+  // Check for auth confirmation in URL
+  const hash = window.location.hash;
+  if (hash.includes('access_token=') || hash.includes('refresh_token=')) {
+    // Remove the hash to clean the URL
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+  
+  // AI Chat submit button
+  const aiSubmitBtn = document.getElementById('ai-submit-button');
+  if (aiSubmitBtn) {
+    aiSubmitBtn.addEventListener('click', submitAIQuestion);
+  }
+  
+  // AI Chat input enter key
+  const aiQuestionInput = document.getElementById('ai-question-input');
+  if (aiQuestionInput) {
+    aiQuestionInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        submitAIQuestion();
+      }
+    });
+  }
+  
+  // Theme toggle
+  const themeToggle = document.getElementById('theme-toggle');
+  if (themeToggle) {
+    themeToggle.addEventListener('click', toggleTheme);
+  }
+  
+  // Hide macronutrient section initially
+  if (macroSection) {
+    macroSection.style.display = 'none';
+  }
+  
+  // Reset daily scan count if needed
+  if (window.auth.currentUser()) {
+    window.auth.resetDailyScanCount();
+  }
+  
+  // Load ads
+  loadAds();
+  
+  // Additional landing page animations
+  document.addEventListener('DOMContentLoaded', function() {
+    // Add scroll animations to landing page elements
+    if (document.querySelector('.landing-page')) {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('animate-in');
+          }
+        });
+      }, {
+        threshold: 0.1
+      });
+      
+      document.querySelectorAll('.feature-card, .step-card, .testimonial-card, .section-header').forEach(el => {
+        el.classList.add('animate-item');
+        observer.observe(el);
+      });
+    }
+    
+    // Make device mockup interactive
+    const deviceMockup = document.querySelector('.device-mockup');
+    if (deviceMockup) {
+      deviceMockup.addEventListener('mousemove', (e) => {
+        const rect = deviceMockup.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / rect.width - 0.5;
+        const y = (e.clientY - rect.top) / rect.height - 0.5;
+        
+        deviceMockup.style.transform = `rotate(${-5 + x * 5}deg) translateY(${-20 + y * 10}px)`;
+      });
+      
+      deviceMockup.addEventListener('mouseleave', () => {
+        deviceMockup.style.transform = 'rotate(-5deg) translateY(-20px)';
+      });
+    }
+  });
+  
+  // Dashboard link
+  const dashboardLink = document.getElementById('dashboard-link');
+  if (dashboardLink) {
+    dashboardLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      showDashboard();
+    });
+  }
+});
 
 // Theme toggle functionality
 function toggleTheme() {
@@ -1682,78 +2091,6 @@ document.addEventListener('click', function(e) {
     }
   }
 });
-
-// Initialize event listeners
-document.addEventListener('DOMContentLoaded', () => {
-  // Check for auth confirmation in URL
-  const hash = window.location.hash;
-  if (hash.includes('access_token=') || hash.includes('refresh_token=')) {
-    // Remove the hash to clean the URL
-    window.history.replaceState(null, '', window.location.pathname + window.location.search);
-  }
-
-  // AI Chat submit button
-  const aiSubmitBtn = document.getElementById('ai-submit-button');
-  if (aiSubmitBtn) {
-    aiSubmitBtn.addEventListener('click', submitAIQuestion);
-  }
-  
-  // AI Chat input enter key
-  const aiQuestionInput = document.getElementById('ai-question-input');
-  if (aiQuestionInput) {
-    aiQuestionInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        submitAIQuestion();
-      }
-    });
-  }
-  
-  // Theme toggle
-  const themeToggle = document.getElementById('theme-toggle');
-  if (themeToggle) {
-    themeToggle.addEventListener('click', toggleTheme);
-  }
-  
-  // Hide macronutrient section initially
-  if (macroSection) {
-    macroSection.style.display = 'none';
-  }
-  
-  // Reset daily scan count if needed
-  if (window.auth.currentUser()) {
-    window.auth.resetDailyScanCount();
-  }
-  
-  // Load ads
-  loadAds();
-});
-
-// Flash functionality
-const flashOption = document.querySelector('.flash-option');
-if (flashOption) {
-  let flashEnabled = false;
-  
-  flashOption.addEventListener('click', async () => {
-    try {
-      if (!video.srcObject) return;
-      
-      const track = video.srcObject.getVideoTracks()[0];
-      const capabilities = track.getCapabilities();
-      
-      if (capabilities.torch) {
-        flashEnabled = !flashEnabled;
-        await track.applyConstraints({
-          advanced: [{ torch: flashEnabled }]
-        });
-        flashOption.style.backgroundColor = flashEnabled ? 'rgba(255,255,0,0.3)' : 'rgba(255,255,255,0.8)';
-      } else {
-        console.log('Torch not supported on this device');
-      }
-    } catch (err) {
-      console.error('Flash error:', err);
-    }
-  });
-}
 
 // Check if user has watched an ad recently
 function checkAdUnlock() {

@@ -27,7 +27,7 @@ async function checkAuth() {
   
   if (error) {
     console.error('Error checking authentication:', error);
-    showLoginForm();
+    showLandingPage();
     return false;
   }
   
@@ -37,7 +37,7 @@ async function checkAuth() {
     updateUIForUser();
     return true;
   } else {
-    showLoginForm();
+    showLandingPage();
     return false;
   }
 }
@@ -100,6 +100,13 @@ async function createUserProfile() {
 
 // Update UI for authenticated user
 function updateUIForUser() {
+  // Hide landing page if visible
+  const landingPage = document.getElementById('landing-page');
+  if (landingPage) {
+    landingPage.style.display = 'none';
+  }
+  document.body.classList.remove('landing-mode');
+  
   // Show app container, hide auth container
   authContainer.style.display = 'none';
   appContainer.style.display = 'block';
@@ -141,10 +148,32 @@ function checkAdUnlock() {
   }
 }
 
+// Show the landing page
+function showLandingPage() {
+  const landingPage = document.getElementById('landing-page');
+  const appContainer = document.getElementById('app-container');
+  const authContainer = document.getElementById('auth-container');
+  
+  if (landingPage) {
+    landingPage.style.display = 'block';
+    appContainer.style.display = 'none';
+    authContainer.style.display = 'none';
+    document.body.classList.add('landing-mode');
+  } else {
+    showLoginForm();
+  }
+}
+
 // Show the login form
 function showLoginForm() {
+  const landingPage = document.getElementById('landing-page');
+  if (landingPage) {
+    landingPage.style.display = 'none';
+  }
+  
   authContainer.style.display = 'flex';
   appContainer.style.display = 'none';
+  document.body.classList.remove('landing-mode');
   
   // Clone template content
   const template = document.getElementById('login-template');
@@ -185,6 +214,15 @@ function showLoginForm() {
 // Show the register form
 function showRegisterForm(e) {
   if (e) e.preventDefault();
+  
+  const landingPage = document.getElementById('landing-page');
+  if (landingPage) {
+    landingPage.style.display = 'none';
+  }
+  
+  authContainer.style.display = 'flex';
+  appContainer.style.display = 'none';
+  document.body.classList.remove('landing-mode');
   
   // Clone template content
   const content = document.importNode(registerTemplate.content, true);
