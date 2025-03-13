@@ -7,6 +7,7 @@ let isCameraOn = false;
 let stream = null;
 let chartInstance = null;
 let userDashboardData = null;
+let userHealthGoals = null;
 
 // DOM elements
 const video = document.getElementById('video');
@@ -223,7 +224,11 @@ async function logScan(scanType, scanData) {
       .insert([{
         user_id: window.auth.currentUser().id,
         scan_type: scanType,
-        scan_data: scanData
+        scan_data: {
+          rating: scanData.rating,
+          timestamp: new Date().toISOString(),
+          items: scanData.items || []
+        }
       }]);
   } catch (error) {
     console.error('Error logging scan:', error);
@@ -327,8 +332,17 @@ async function analyzeImage(base64Image) {
 
   let systemPrompt;
   
+  let goalContext = '';
+  if (userHealthGoals && userHealthGoals.length > 0) {
+    goalContext = 'The user has the following health goals:\n';
+    userHealthGoals.forEach(goal => {
+      goalContext += `- ${goal.type}: ${goal.target} (Timeline: ${goal.timeline})\n`;
+    });
+    goalContext += '\nPlease consider these goals in your analysis and provide specific advice related to them.\n\n';
+  }
+  
   if (currentMode === 'label') {
-    systemPrompt = `You are an advanced nutrition and food safety expert. Analyze the ingredients list and provide:
+    systemPrompt = `You are an advanced nutrition and food safety expert. ${goalContext}Analyze the ingredients list and provide:
 1. A health rating from 1-10
 2. A detailed breakdown of concerning ingredients with specific health impacts
 3. Comprehensive health insights and recommendations
@@ -383,10 +397,17 @@ Your response MUST be valid JSON with this structure:
       "sodium": number,
       "fat": number
     }
-  }
+  }${userHealthGoals && userHealthGoals.length > 0 ? `,
+  "goalAlignment": [
+    {
+      "goalType": string,
+      "alignment": "good" | "neutral" | "poor",
+      "recommendation": string
+    }
+  ]` : ''}
 }`;
   } else if (currentMode === 'food') {
-    systemPrompt = `You are an advanced nutrition and food science expert. Analyze the food in this image and provide:
+    systemPrompt = `You are an advanced nutrition and food science expert. ${goalContext}Analyze the food in this image and provide:
 1. A health rating from 1-10
 2. Identification of the food items visible
 3. Estimated nutritional profile and caloric content
@@ -458,9 +479,17 @@ Your response MUST be valid JSON with this structure:
   },
   "dietaryConsiderations": [string],
   "preparationTips": [string]
+}${userHealthGoals && userHealthGoals.length > 0 ? `,
+  "goalAlignment": [
+    {
+      "goalType": string,
+      "alignment": "good" | "neutral" | "poor",
+      "recommendation": string
+    }
+  ]` : ''}
 }`;
   } else if (currentMode === 'gym') {
-    systemPrompt = `You are an advanced sports nutrition and fitness expert. Analyze the food in this image from a workout and fitness perspective:
+    systemPrompt = `You are an advanced sports nutrition and fitness expert. ${goalContext}Analyze the food in this image from a workout and fitness perspective:
 1. A fitness rating from 1-10
 2. Identification of the food items visible
 3. Pre-workout and post-workout suitability assessment
@@ -532,6 +561,14 @@ Your response MUST be valid JSON with this structure:
   },
   "fitnessConsiderations": [string],
   "supplementSuggestions": [string]
+}${userHealthGoals && userHealthGoals.length > 0 ? `,
+  "goalAlignment": [
+    {
+      "goalType": string,
+      "alignment": "good" | "neutral" | "poor",
+      "recommendation": string
+    }
+  ]` : ''}
 }`;
   }
 
@@ -608,7 +645,8 @@ Your response MUST be valid JSON with this structure:
   if (window.auth.currentUser()) {
     logScan(currentMode, {
       rating: analysisData?.rating || 5,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      items: analysisData?.foodIdentification?.mainItems || []
     });
   }
   
@@ -620,6 +658,9 @@ function displayResults(data) {
   resultsDiv.style.display = 'block';
   errorDiv.style.display = 'none';
   
+  // Store actual analysis data rating from API response
+  const actualRating = data.rating;
+
   // Health Score with more visual elements
   const healthScoreEl = document.getElementById('healthScore');
   const rating = data.rating || 'N/A';
@@ -1169,12 +1210,45 @@ function displayResults(data) {
     alternativesDiv.innerHTML = '<div class="alternative-item"><span>No alternatives suggested</span></div>';
   }
   
+  // Add goal alignment section if available
+  if (data.goalAlignment && data.goalAlignment.length > 0) {
+    const insightsDiv = document.getElementById('insights');
+    
+    insightsDiv.innerHTML += `
+      <div class="results-section">
+        <h3><i class="fas fa-bullseye"></i> Goal Alignment</h3>
+        <div class="goal-alignment">
+          ${data.goalAlignment.map(goal => `
+            <div class="alignment-card ${goal.alignment}-alignment">
+              <div class="alignment-header">
+                <h4>${goal.goalType}</h4>
+                <span class="alignment-badge ${goal.alignment}-badge">
+                  ${goal.alignment === 'good' ? 'Good Match' : goal.alignment === 'neutral' ? 'Neutral' : 'Poor Match'}
+                </span>
+              </div>
+              <p>${goal.recommendation}</p>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+  
   // Create enhanced nutrition charts
   createNutritionChart(data);
   createMacronutrientChart(data);
   
   // Show the AI assistant section
   document.getElementById('ai-assistant-container').style.display = 'block';
+  
+  // Log the scan to the database if authenticated
+  if (window.auth.currentUser()) {
+    logScan(currentMode, {
+      rating: actualRating || 5,
+      timestamp: new Date().toISOString(),
+      items: data?.foodIdentification?.mainItems || []
+    });
+  }
 }
 
 // Create a more advanced nutrition radar chart
@@ -1378,7 +1452,7 @@ async function submitAIQuestion() {
   
   try {
     // Create system message based on analysis data
-    let systemMessage = `You are a helpful nutrition assistant named NutriScan AI. 
+    let systemMessage = `You are a helpful nutrition assistant named CalcuBite AI. 
 Answer questions about nutrition, ingredients, health implications, and dietary advice.
 ${analysisData ? 'The user has just scanned a food item with the following analysis:' : ''}`;
 
@@ -1401,8 +1475,8 @@ ${analysisData ? 'The user has just scanned a food item with the following analy
 Be helpful, accurate, and provide evidence-based advice. Keep answers concise but informative.
 If the user asks about something not related to nutrition or health, politely redirect them.`;
 
-    // Prepare messages for the API chat
-    let messages = [
+    // Prepare messages for the API
+    const messages = [
       {
         role: "system",
         content: systemMessage
@@ -1414,12 +1488,31 @@ If the user asks about something not related to nutrition or health, politely re
       conversationHistory = conversationHistory.slice(-10);
     }
     
-    messages = [...messages, ...conversationHistory];
+    messages.push(...conversationHistory);
     
-    // Make the API call
-    const completion = await websim.chat.completions.create({
-      messages: messages
+    // Make request to Pollination API
+    const response = await fetch('https://text.pollinations.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: "openai-large",
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 800,
+        private: true
+      })
     });
+    
+    if (!response.ok) {
+      throw new Error(`API responded with status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const aiResponse = data.choices && data.choices[0] && data.choices[0].message 
+      ? data.choices[0].message.content 
+      : "Sorry, I couldn't generate a response.";
     
     // Remove loading message
     const loadingMessage = document.getElementById('ai-loading-message');
@@ -1432,7 +1525,7 @@ If the user asks about something not related to nutrition or health, politely re
           <i class="fas fa-robot"></i>
         </div>
         <div class="chat-bubble">
-          <p>${completion.content.replace(/\n/g, '<br>')}</p>
+          <p>${aiResponse.replace(/\n/g, '<br>')}</p>
         </div>
       </div>
     `;
@@ -1440,7 +1533,7 @@ If the user asks about something not related to nutrition or health, politely re
     // Add AI response to conversation history
     conversationHistory.push({
       role: "assistant",
-      content: completion.content
+      content: aiResponse
     });
     
     // Scroll to bottom
@@ -1458,7 +1551,7 @@ If the user asks about something not related to nutrition or health, politely re
           <i class="fas fa-robot"></i>
         </div>
         <div class="chat-bubble error-bubble">
-          <p>Sorry, I encountered an error. Please try again.</p>
+          <p>Sorry, I encountered an error: ${error.message}. Please try again.</p>
         </div>
       </div>
     `;
@@ -1470,451 +1563,523 @@ If the user asks about something not related to nutrition or health, politely re
   }
 }
 
-// Function to show user dashboard
-async function showDashboard() {
+// Show dashboard functionality
+function showDashboard() {
   try {
-    // Check if user is authenticated
-    if (!window.auth || !window.auth.currentUser()) {
-      alert('Please log in to view your dashboard');
-      return;
-    }
+    // Create dashboard modal if it doesn't exist
+    let dashboardModal = document.getElementById('dashboard-modal');
     
-    // Create the dashboard modal
-    const dashboardModal = document.createElement('div');
-    dashboardModal.className = 'modal';
-    dashboardModal.id = 'dashboard-modal';
-    
-    // Fetch user scan history
-    await fetchUserDashboardData();
-    
-    // Create dashboard content
-    dashboardModal.innerHTML = `
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2><i class="fas fa-tachometer-alt"></i> Your Dashboard</h2>
-          <span class="close-modal">&times;</span>
-        </div>
-        <div class="modal-body">
-          <div class="dashboard-content">
-            <div class="dashboard-overview">
-              <div class="dashboard-stats">
-                <div class="stat-card">
-                  <div class="stat-icon"><i class="fas fa-camera"></i></div>
-                  <div class="stat-data">
-                    <h4>Total Scans</h4>
-                    <p>${userDashboardData?.scans?.length || 0}</p>
+    if (!dashboardModal) {
+      dashboardModal = document.createElement('div');
+      dashboardModal.id = 'dashboard-modal';
+      dashboardModal.className = 'modal';
+      
+      dashboardModal.innerHTML = `
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2><i class="fas fa-tachometer-alt"></i> Your Dashboard</h2>
+            <span class="close-modal">&times;</span>
+          </div>
+          <div class="modal-body">
+            <div class="dashboard-content">
+              <div class="dashboard-overview">
+                <div class="dashboard-chart">
+                  <h3><i class="fas fa-chart-line"></i> Scan History</h3>
+                  <div class="chart-container" style="height: 250px;">
+                    <canvas id="scan-history-chart"></canvas>
                   </div>
                 </div>
-                <div class="stat-card">
-                  <div class="stat-icon"><i class="fas fa-calendar-check"></i></div>
-                  <div class="stat-data">
-                    <h4>Scans Today</h4>
-                    <p>${countScansToday()}</p>
+                <div class="dashboard-stats">
+                  <div class="stat-card">
+                    <div class="stat-icon">
+                      <i class="fas fa-camera"></i>
+                    </div>
+                    <div class="stat-data">
+                      <h4>Total Scans</h4>
+                      <p id="dashboard-total-scans">0</p>
+                    </div>
                   </div>
-                </div>
-                <div class="stat-card">
-                  <div class="stat-icon"><i class="fas fa-battery-three-quarters"></i></div>
-                  <div class="stat-data">
-                    <h4>Scans Remaining</h4>
-                    <p>${window.auth.userProfile()?.scans_remaining || 0}</p>
+                  <div class="stat-card">
+                    <div class="stat-icon">
+                      <i class="fas fa-calendar-check"></i>
+                    </div>
+                    <div class="stat-data">
+                      <h4>Recent Activity</h4>
+                      <p id="dashboard-last-scan">Never</p>
+                    </div>
+                  </div>
+                  <div class="stat-card">
+                    <div class="stat-icon">
+                      <i class="fas fa-bolt"></i>
+                    </div>
+                    <div class="stat-data">
+                      <h4>Scans Remaining</h4>
+                      <p id="dashboard-scans-remaining">0</p>
+                    </div>
                   </div>
                 </div>
               </div>
               
-              <div class="chart-container dashboard-chart">
-                <canvas id="scan-history-chart"></canvas>
+              <div class="dashboard-section health-goals">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <h3><i class="fas fa-bullseye"></i> Health Goals</h3>
+                  <button id="add-goal-button" class="secondary-button"><i class="fas fa-plus"></i> Add Goal</button>
+                </div>
+                <div id="goals-container" class="goals-container">
+                  <div class="add-goal-card" id="no-goals-placeholder">
+                    <p>You haven't set any health goals yet. Click "Add Goal" to get started!</p>
+                  </div>
+                </div>
               </div>
-            </div>
-            
-            <div class="dashboard-section">
-              <h3><i class="fas fa-history"></i> Recent Scans</h3>
-              <div class="recent-scans">
-                ${renderRecentScans()}
-              </div>
-            </div>
-            
-            <div class="dashboard-section">
-              <h3><i class="fas fa-bullseye"></i> Health Goals</h3>
-              <div class="health-goals">
-                <div class="empty-state">
-                  <i class="fas fa-flag"></i>
-                  <p>You haven't set any health goals yet.</p>
-                  <button class="secondary-button" id="add-goal-btn">
-                    <i class="fas fa-plus"></i> Add Health Goal
-                  </button>
+              
+              <div class="dashboard-section">
+                <h3><i class="fas fa-history"></i> Recent Scans</h3>
+                <div class="recent-scans">
+                  <div id="recent-scans-list" class="scans-list">
+                    <div class="empty-state" id="no-scans-placeholder">
+                      <i class="fas fa-camera-retro"></i>
+                      <p>You haven't scanned any items yet. Start scanning to see your history here!</p>
+                      <button id="start-scanning-btn" class="primary-button">Start Scanning</button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    `;
-    
-    // Add the modal to the DOM
-    document.body.appendChild(dashboardModal);
-    dashboardModal.style.display = 'block';
-    
-    // Add event listeners
-    const closeBtn = dashboardModal.querySelector('.close-modal');
-    closeBtn.addEventListener('click', () => {
-      dashboardModal.remove();
-    });
-    
-    // Close modal when clicking outside
-    dashboardModal.addEventListener('click', (e) => {
-      if (e.target === dashboardModal) {
-        dashboardModal.remove();
-      }
-    });
-    
-    // Add goal button
-    const addGoalBtn = document.getElementById('add-goal-btn');
-    if (addGoalBtn) {
-      addGoalBtn.addEventListener('click', () => {
-        alert('Health goals feature coming soon!');
+      `;
+      
+      document.body.appendChild(dashboardModal);
+      
+      // Close button event
+      const closeBtn = dashboardModal.querySelector('.close-modal');
+      closeBtn.addEventListener('click', () => {
+        dashboardModal.style.display = 'none';
+        
+        // Destroy chart to avoid canvas reuse issues
+        if (window.scanHistoryChart) {
+          window.scanHistoryChart.destroy();
+          window.scanHistoryChart = null;
+        }
+      });
+      
+      // Add goal button
+      const addGoalBtn = dashboardModal.querySelector('#add-goal-button');
+      addGoalBtn.addEventListener('click', showAddGoalModal);
+      
+      // Start scanning button
+      const startScanningBtn = dashboardModal.querySelector('#start-scanning-btn');
+      startScanningBtn.addEventListener('click', () => {
+        dashboardModal.style.display = 'none';
       });
     }
     
-    // Create scan history chart
-    createScanHistoryChart();
+    // Fetch user's dashboard data
+    fetchDashboardData().then(() => {
+      // Show the modal
+      dashboardModal.style.display = 'block';
+      
+      // Update dashboard UI with fetched data
+      updateDashboardUI();
+      
+      // Create chart
+      createScanHistoryChart();
+    }).catch(error => {
+      console.error('Error showing dashboard:', error);
+      alert('Error loading dashboard data. Please try again.');
+    });
     
   } catch (error) {
     console.error('Error showing dashboard:', error);
-    alert('Failed to load dashboard. Please try again.');
+    alert('Error showing dashboard: ' + error.message);
   }
 }
 
-// Fetch user dashboard data
-async function fetchUserDashboardData() {
+// Fetch dashboard data
+async function fetchDashboardData() {
   if (!window.auth.currentUser()) return;
   
   try {
-    // Fetch user scan history
-    const { data, error } = await supabase
+    // Fetch scan history
+    const { data: scanData, error: scanError } = await supabase
       .from('scan_history')
+      .select('*')
+      .eq('user_id', window.auth.currentUser().id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    
+    if (scanError) throw scanError;
+    
+    // Fetch health goals
+    const { data: goalData, error: goalError } = await supabase
+      .from('health_goals')
       .select('*')
       .eq('user_id', window.auth.currentUser().id)
       .order('created_at', { ascending: false });
     
-    if (error) throw error;
+    if (goalError) throw goalError;
     
+    // Fetch profile for scans remaining
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('scans_remaining')
+      .eq('id', window.auth.currentUser().id)
+      .single();
+    
+    if (profileError && profileError.code !== 'PGRST116') throw profileError;
+    
+    // Store data for UI update
     userDashboardData = {
-      scans: data || []
+      scans: scanData || [],
+      goals: goalData || [],
+      profile: profileData || { scans_remaining: 0 }
     };
+    
+    // Update global variable for user health goals
+    userHealthGoals = goalData?.map(g => ({
+      id: g.id,
+      type: g.goal_type,
+      target: g.target,
+      timeline: g.timeline,
+      notes: g.notes,
+      progress: g.progress
+    })) || [];
+    
+    return userDashboardData;
     
   } catch (error) {
     console.error('Error fetching dashboard data:', error);
-    userDashboardData = { scans: [] };
+    throw error;
   }
 }
 
-// Count scans performed today
-function countScansToday() {
-  if (!userDashboardData?.scans) return 0;
+// Update dashboard UI with data
+function updateDashboardUI() {
+  if (!userDashboardData) return;
   
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // Update stats
+  const totalScansEl = document.getElementById('dashboard-total-scans');
+  const scansRemainingEl = document.getElementById('dashboard-scans-remaining');
+  const lastScanEl = document.getElementById('dashboard-last-scan');
   
-  return userDashboardData.scans.filter(scan => {
-    const scanDate = new Date(scan.created_at);
-    return scanDate >= today;
-  }).length;
-}
-
-// Render recent scans
-function renderRecentScans() {
-  if (!userDashboardData?.scans || userDashboardData.scans.length === 0) {
-    return `
-      <div class="empty-state">
-        <i class="fas fa-camera-retro"></i>
-        <p>You haven't performed any scans yet.</p>
-        <button class="secondary-button" id="start-scanning-btn">
-          <i class="fas fa-camera"></i> Start Scanning
-        </button>
-      </div>
-    `;
+  if (totalScansEl) totalScansEl.textContent = userDashboardData.scans?.length || 0;
+  if (scansRemainingEl) scansRemainingEl.textContent = userDashboardData.profile?.scans_remaining || 0;
+  
+  // Last scan date
+  if (lastScanEl) {
+    if (userDashboardData.scans && userDashboardData.scans.length > 0) {
+      const lastScanDate = new Date(userDashboardData.scans[0].created_at);
+      lastScanEl.textContent = lastScanDate.toLocaleDateString();
+    } else {
+      lastScanEl.textContent = 'Never';
+    }
   }
   
-  const recentScans = userDashboardData.scans.slice(0, 5);
-  return `
-    <div class="scans-list">
-      ${recentScans.map(scan => {
-        const scanDate = new Date(scan.created_at).toLocaleString();
-        const scanType = scan.scan_type.charAt(0).toUpperCase() + scan.scan_type.slice(1);
-        const rating = scan.scan_data?.rating || 'N/A';
+  // Update recent scans list
+  const recentScansList = document.getElementById('recent-scans-list');
+  const noScansPlaceholder = document.getElementById('no-scans-placeholder');
+  
+  if (recentScansList) {
+    if (userDashboardData.scans.length > 0 && noScansPlaceholder) {
+      noScansPlaceholder.style.display = 'none';
+      
+      // Clear existing list
+      recentScansList.innerHTML = '';
+      
+      // Add scan items (up to 5)
+      const recentScans = userDashboardData.scans.slice(0, 5);
+      
+      recentScans.forEach(scan => {
+        const scanDate = new Date(scan.created_at).toLocaleDateString();
+        const scanItem = document.createElement('div');
+        scanItem.className = 'scan-item';
         
-        return `
-          <div class="scan-item">
-            <div class="scan-icon">
-              <i class="fas fa-${scan.scan_type === 'label' ? 'tag' : scan.scan_type === 'food' ? 'utensils' : 'dumbbell'}"></i>
+        let scanIcon, scanType;
+        switch (scan.scan_type) {
+          case 'label':
+            scanIcon = 'tag';
+            scanType = 'Label Analysis';
+            break;
+          case 'food':
+            scanIcon = 'utensils';
+            scanType = 'Food Analysis';
+            break;
+          case 'gym':
+            scanIcon = 'dumbbell';
+            scanType = 'Gym Analysis';
+            break;
+          default:
+            scanIcon = 'camera';
+            scanType = 'Scan';
+        }
+        
+        // Get food items for display and actual rating from scan data
+        const foodItems = scan.scan_data?.items ? scan.scan_data.items.join(', ') : 
+                          (scanType === 'Label Analysis' ? 'Food label' : 'Food item');
+        const scanRating = scan.scan_data?.rating !== undefined ? scan.scan_data.rating : 'N/A';
+        
+        scanItem.innerHTML = `
+          <div class="scan-icon">
+            <i class="fas fa-${scanIcon}"></i>
+          </div>
+          <div class="scan-details">
+            <h4>${scanType}</h4>
+            <p class="scan-date">${scanDate}</p>
+            <p class="scan-item-name">${foodItems}</p>
+          </div>
+          <div class="scan-rating">${scanRating}</div>
+        `;
+        
+        recentScansList.appendChild(scanItem);
+      });
+    } else if (noScansPlaceholder) {
+      noScansPlaceholder.style.display = 'flex';
+    }
+  }
+  
+  // Update health goals
+  const goalsContainer = document.getElementById('goals-container');
+  const noGoalsPlaceholder = document.getElementById('no-goals-placeholder');
+  
+  if (goalsContainer) {
+    if (userDashboardData.goals.length > 0 && noGoalsPlaceholder) {
+      noGoalsPlaceholder.style.display = 'none';
+      
+      // Clear existing goals
+      goalsContainer.innerHTML = '';
+      
+      // Add goal cards
+      userDashboardData.goals.forEach(goal => {
+        const goalCard = document.createElement('div');
+        goalCard.className = 'goal-card';
+        goalCard.id = `goal-${goal.id}`;
+        
+        let goalIcon;
+        switch (goal.goal_type.toLowerCase()) {
+          case 'weight loss':
+            goalIcon = 'weight';
+            break;
+          case 'muscle gain':
+            goalIcon = 'dumbbell';
+            break;
+          case 'nutrition':
+            goalIcon = 'apple-alt';
+            break;
+          case 'health':
+            goalIcon = 'heartbeat';
+            break;
+          default:
+            goalIcon = 'bullseye';
+        }
+        
+        goalCard.innerHTML = `
+          <div class="goal-header">
+            <h4><i class="fas fa-${goalIcon}"></i> ${goal.goal_type}</h4>
+            <button class="delete-goal" data-id="${goal.id}">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="goal-details">
+            <p><strong>Target:</strong> ${goal.target}</p>
+            <p><strong>Timeline:</strong> ${goal.timeline || 'Not specified'}</p>
+            ${goal.notes ? `<p><strong>Notes:</strong> ${goal.notes}</p>` : ''}
+          </div>
+          <div class="goal-progress">
+            <div class="progress-bar">
+              <div class="progress" style="width: ${goal.progress}%; background-color: var(--primary);"></div>
             </div>
-            <div class="scan-details">
-              <h4>${scanType} Scan</h4>
-              <p class="scan-date">${scanDate}</p>
-            </div>
-            <div class="scan-rating" style="color: ${rating >= 7 ? 'var(--success)' : (rating >= 4 ? 'var(--warning)' : 'var(--danger)')}">
-              ${rating}/10
-            </div>
+            <small>${goal.progress}% complete</small>
           </div>
         `;
-      }).join('')}
-    </div>
-  `;
-}
-
-// Create scan history chart
-function createScanHistoryChart() {
-  const chartCanvas = document.getElementById('scan-history-chart');
-  if (!chartCanvas) return;
-  
-  // Group scan data by date
-  const scansByDate = {};
-  
-  if (userDashboardData?.scans) {
-    // Consider only the last 14 days
-    const dateLabels = [];
-    for (let i = 13; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      dateLabels.push(dateStr);
-      scansByDate[dateStr] = 0;
-    }
-    
-    // Count scans by date
-    userDashboardData.scans.forEach(scan => {
-      const dateStr = new Date(scan.created_at).toISOString().split('T')[0];
-      if (scansByDate[dateStr] !== undefined) {
-        scansByDate[dateStr]++;
-      }
-    });
-    
-    // Convert object to arrays for Chart.js
-    const labels = Object.keys(scansByDate).sort();
-    const data = labels.map(date => scansByDate[date]);
-    
-    // Format labels for display (e.g., "Apr 15")
-    const formattedLabels = labels.map(date => {
-      const d = new Date(date);
-      return `${d.toLocaleString('default', { month: 'short' })} ${d.getDate()}`;
-    });
-    
-    new Chart(chartCanvas, {
-      type: 'line',
-      data: {
-        labels: formattedLabels,
-        datasets: [{
-          label: 'Scans',
-          data: data,
-          backgroundColor: 'rgba(79, 70, 229, 0.2)',
-          borderColor: 'rgba(79, 70, 229, 1)',
-          tension: 0.4,
-          fill: true,
-          pointBackgroundColor: 'rgba(79, 70, 229, 1)',
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            display: false
-          },
-          title: {
-            display: true,
-            text: 'Scan Activity (Last 14 Days)'
-          }
-        },
-        scales: {
-          y: {
-            beginAtZero: true,
-            ticks: {
-              precision: 0
-            }
-          },
-          x: {
-            grid: {
-              display: false
-            }
-          }
-        }
-      }
-    });
-  }
-}
-
-// Initialize event listeners
-document.addEventListener('DOMContentLoaded', () => {
-  // Show landing page for unauthenticated users
-  const isAuthenticated = window.auth && window.auth.currentUser();
-  const landingPage = document.getElementById('landing-page');
-  const appContainer = document.getElementById('app-container');
-  const authContainer = document.getElementById('auth-container');
-  
-  if (!isAuthenticated && landingPage) {
-    landingPage.style.display = 'block';
-    appContainer.style.display = 'none';
-    authContainer.style.display = 'none';
-    document.body.classList.add('landing-mode');
-    
-    // Mobile menu functionality
-    const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
-    const landingNav = document.querySelector('.landing-nav');
-    
-    if (mobileMenuToggle) {
-      mobileMenuToggle.addEventListener('click', () => {
-        landingNav.classList.toggle('show');
-        mobileMenuToggle.querySelector('i').classList.toggle('fa-bars');
-        mobileMenuToggle.querySelector('i').classList.toggle('fa-times');
-      });
-      
-      // Close menu when clicking navigation items
-      const navLinks = landingNav.querySelectorAll('a');
-      navLinks.forEach(link => {
-        link.addEventListener('click', () => {
-          landingNav.classList.remove('show');
-          mobileMenuToggle.querySelector('i').classList.remove('fa-times');
-          mobileMenuToggle.querySelector('i').classList.add('fa-bars');
-        });
-      });
-    }
-  }
-  
-  // Add landing page auth navigation
-  const landingLoginBtn = document.getElementById('landing-login-btn');
-  const landingSignupBtn = document.getElementById('landing-signup-btn');
-  const heroSignupBtn = document.getElementById('hero-signup-btn');
-  const ctaSignupBtn = document.getElementById('cta-signup-btn');
-  
-  if (landingLoginBtn) {
-    landingLoginBtn.addEventListener('click', () => {
-      showLoginForm();
-      document.getElementById('landing-page').style.display = 'none';
-      document.getElementById('auth-container').style.display = 'flex';
-    });
-  }
-  
-  if (landingSignupBtn) {
-    landingSignupBtn.addEventListener('click', () => {
-      showRegisterForm();
-      document.getElementById('landing-page').style.display = 'none';
-      document.getElementById('auth-container').style.display = 'flex';
-    });
-  }
-  
-  if (heroSignupBtn) {
-    heroSignupBtn.addEventListener('click', () => {
-      showRegisterForm();
-      document.getElementById('landing-page').style.display = 'none';
-      document.getElementById('auth-container').style.display = 'flex';
-    });
-  }
-  
-  if (ctaSignupBtn) {
-    ctaSignupBtn.addEventListener('click', () => {
-      showRegisterForm();
-      document.getElementById('landing-page').style.display = 'none';
-      document.getElementById('auth-container').style.display = 'flex';
-    });
-  }
-  
-  // Handle demo button click
-  const demoBtn = document.getElementById('hero-demo-btn');
-  if (demoBtn) {
-    demoBtn.addEventListener('click', () => {
-      // You can show a demo video modal here
-      alert('Demo functionality coming soon!');
-    });
-  }
-  
-  // Check for auth confirmation in URL
-  const hash = window.location.hash;
-  if (hash.includes('access_token=') || hash.includes('refresh_token=')) {
-    // Remove the hash to clean the URL
-    window.history.replaceState(null, '', window.location.pathname + window.location.search);
-  }
-  
-  // AI Chat submit button
-  const aiSubmitBtn = document.getElementById('ai-submit-button');
-  if (aiSubmitBtn) {
-    aiSubmitBtn.addEventListener('click', submitAIQuestion);
-  }
-  
-  // AI Chat input enter key
-  const aiQuestionInput = document.getElementById('ai-question-input');
-  if (aiQuestionInput) {
-    aiQuestionInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        submitAIQuestion();
-      }
-    });
-  }
-  
-  // Theme toggle
-  const themeToggle = document.getElementById('theme-toggle');
-  if (themeToggle) {
-    themeToggle.addEventListener('click', toggleTheme);
-  }
-  
-  // Hide macronutrient section initially
-  if (macroSection) {
-    macroSection.style.display = 'none';
-  }
-  
-  // Reset daily scan count if needed
-  if (window.auth.currentUser()) {
-    window.auth.resetDailyScanCount();
-  }
-  
-  // Load ads
-  loadAds();
-  
-  // Additional landing page animations
-  document.addEventListener('DOMContentLoaded', function() {
-    // Add scroll animations to landing page elements
-    if (document.querySelector('.landing-page')) {
-      const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('animate-in');
-          }
-        });
-      }, {
-        threshold: 0.1
-      });
-      
-      document.querySelectorAll('.feature-card, .step-card, .testimonial-card, .section-header').forEach(el => {
-        el.classList.add('animate-item');
-        observer.observe(el);
-      });
-    }
-    
-    // Make device mockup interactive
-    const deviceMockup = document.querySelector('.device-mockup');
-    if (deviceMockup) {
-      deviceMockup.addEventListener('mousemove', (e) => {
-        const rect = deviceMockup.getBoundingClientRect();
-        const x = (e.clientX - rect.left) / rect.width - 0.5;
-        const y = (e.clientY - rect.top) / rect.height - 0.5;
         
-        deviceMockup.style.transform = `rotate(${-5 + x * 5}deg) translateY(${-20 + y * 10}px)`;
+        goalsContainer.appendChild(goalCard);
+        
+        // Add delete event listener
+        const deleteBtn = goalCard.querySelector('.delete-goal');
+        deleteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteGoal(goal.id);
+        });
       });
       
-      deviceMockup.addEventListener('mouseleave', () => {
-        deviceMockup.style.transform = 'rotate(-5deg) translateY(-20px)';
-      });
+      // Add "Add Goal" card at the end
+      const addGoalCard = document.createElement('div');
+      addGoalCard.className = 'add-goal-card';
+      addGoalCard.innerHTML = `
+        <i class="fas fa-plus"></i>
+        <p>Add New Goal</p>
+      `;
+      
+      addGoalCard.addEventListener('click', showAddGoalModal);
+      goalsContainer.appendChild(addGoalCard);
+      
+    } else {
+      // No goals placeholder
+      goalsContainer.innerHTML = `
+        <div class="add-goal-card" id="no-goals-placeholder">
+          <p>You haven't set any health goals yet. Click "Add Goal" to get started!</p>
+        </div>
+      `;
+      
+      // Add click event
+      const addGoalCard = goalsContainer.querySelector('.add-goal-card');
+      if (addGoalCard) {
+        addGoalCard.addEventListener('click', showAddGoalModal);
+      }
     }
-  });
+  }
+}
+
+// Show add goal modal
+function showAddGoalModal() {
+  // Create modal if it doesn't exist
+  let goalModal = document.getElementById('add-goal-modal');
   
-  // Dashboard link
-  const dashboardLink = document.getElementById('dashboard-link');
-  if (dashboardLink) {
-    dashboardLink.addEventListener('click', (e) => {
+  if (!goalModal) {
+    goalModal = document.createElement('div');
+    goalModal.id = 'add-goal-modal';
+    goalModal.className = 'modal';
+    
+    goalModal.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2><i class="fas fa-plus-circle"></i> Add Health Goal</h2>
+          <span class="close-modal">&times;</span>
+        </div>
+        <div class="modal-body">
+          <form id="add-goal-form">
+            <div class="form-group">
+              <label for="goal-type">Goal Type</label>
+              <select id="goal-type" required>
+                <option value="">Select a goal type</option>
+                <option value="Weight Loss">Weight Loss</option>
+                <option value="Muscle Gain">Muscle Gain</option>
+                <option value="Nutrition">Nutrition</option>
+                <option value="Health">Health Improvement</option>
+                <option value="Fitness">Fitness</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="goal-target">Target</label>
+              <input type="text" id="goal-target" placeholder="E.g., Lose 10 pounds, Reduce sugar intake" required>
+            </div>
+            <div class="form-group">
+              <label for="goal-timeline">Timeline (optional)</label>
+              <input type="text" id="goal-timeline" placeholder="E.g., 3 months, By December">
+            </div>
+            <div class="form-group">
+              <label for="goal-notes">Notes (optional)</label>
+              <textarea id="goal-notes" rows="3" placeholder="Additional details or notes"></textarea>
+            </div>
+            <button type="submit" class="primary-button">Save Goal</button>
+          </form>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(goalModal);
+    
+    // Close button event
+    const closeBtn = goalModal.querySelector('.close-modal');
+    closeBtn.addEventListener('click', () => {
+      goalModal.style.display = 'none';
+    });
+    
+    // Form submission
+    const form = goalModal.querySelector('#add-goal-form');
+    form.addEventListener('submit', (e) => {
       e.preventDefault();
-      showDashboard();
+      saveGoal();
     });
   }
-});
+  
+  // Reset form
+  const form = goalModal.querySelector('#add-goal-form');
+  if (form) form.reset();
+  
+  // Show modal
+  goalModal.style.display = 'block';
+}
+
+// Save goal to database
+async function saveGoal() {
+  try {
+    const goalType = document.getElementById('goal-type').value;
+    const target = document.getElementById('goal-target').value;
+    const timeline = document.getElementById('goal-timeline').value;
+    const notes = document.getElementById('goal-notes').value;
+    
+    if (!window.auth.currentUser()) {
+      alert('You must be logged in to save goals.');
+      return;
+    }
+    
+    const { data, error } = await supabase
+      .from('health_goals')
+      .insert([{
+        user_id: window.auth.currentUser().id,
+        goal_type: goalType,
+        target: target,
+        timeline: timeline,
+        notes: notes,
+        progress: 0
+      }]);
+    
+    if (error) throw error;
+    
+    // Close modal
+    const goalModal = document.getElementById('add-goal-modal');
+    if (goalModal) goalModal.style.display = 'none';
+    
+    // Refresh dashboard data
+    await fetchDashboardData();
+    updateDashboardUI();
+    
+    // Show success message
+    alert('Goal added successfully!');
+    
+  } catch (error) {
+    console.error('Error saving goal:', error);
+    alert('Error saving goal: ' + error.message);
+  }
+}
+
+// Delete goal
+async function deleteGoal(goalId) {
+  if (!confirm('Are you sure you want to delete this goal?')) {
+    return;
+  }
+  
+  try {
+    const { error } = await supabase
+      .from('health_goals')
+      .delete()
+      .eq('id', goalId);
+    
+    if (error) throw error;
+    
+    // Remove from UI
+    const goalCard = document.getElementById(`goal-${goalId}`);
+    if (goalCard) goalCard.remove();
+    
+    // Refresh dashboard data
+    await fetchDashboardData();
+    updateDashboardUI();
+    
+  } catch (error) {
+    console.error('Error deleting goal:', error);
+    alert('Error deleting goal: ' + error.message);
+  }
+}
+
+// Dashboard link
+const dashboardLink = document.getElementById('dashboard-link');
+if (dashboardLink) {
+    dashboardLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        showDashboard();
+    });
+}
 
 // Theme toggle functionality
 function toggleTheme() {
@@ -2108,3 +2273,291 @@ function checkAdUnlock() {
     return false; // User needs to watch ad
   }
 }
+
+// Create scan history chart
+function createScanHistoryChart() {
+  const chartCanvas = document.getElementById('scan-history-chart');
+  if (!chartCanvas) return;
+  
+  // Check if chart instance exists and destroy it
+  if (window.scanHistoryChart) {
+    window.scanHistoryChart.destroy();
+    window.scanHistoryChart = null;
+  }
+  
+  // Group scan data by date
+  const scansByDate = {};
+  
+  if (userDashboardData?.scans) {
+    // Create date range for the last 14 days
+    const dateLabels = [];
+    const now = new Date();
+    for (let i = 13; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(now.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      dateLabels.push(dateStr);
+      scansByDate[dateStr] = 0;
+    }
+    
+    // Count scans by date
+    userDashboardData.scans.forEach(scan => {
+      const scanDate = new Date(scan.created_at);
+      const dateStr = scanDate.toISOString().split('T')[0];
+      if (scansByDate[dateStr] !== undefined) {
+        scansByDate[dateStr]++;
+      }
+    });
+    
+    // Convert object to arrays for Chart.js
+    const labels = Object.keys(scansByDate).sort();
+    const data = labels.map(date => scansByDate[date]);
+    
+    // Format labels for display (e.g., "Apr 15")
+    const formattedLabels = labels.map(date => {
+      const d = new Date(date);
+      return `${d.toLocaleString('default', { month: 'short' })} ${d.getDate()}`;
+    });
+    
+    try {
+      window.scanHistoryChart = new Chart(chartCanvas, {
+        type: 'line',
+        data: {
+          labels: formattedLabels,
+          datasets: [{
+            label: 'Scans',
+            data: data,
+            backgroundColor: 'rgba(79, 70, 229, 0.2)',
+            borderColor: 'rgba(79, 70, 229, 1)',
+            tension: 0.4,
+            fill: true,
+            pointBackgroundColor: 'rgba(79, 70, 229, 1)',
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false
+            },
+            title: {
+              display: true,
+              text: 'Scan Activity (Last 14 Days)'
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                precision: 0
+              }
+            },
+            x: {
+              grid: {
+                display: false
+              }
+            }
+          }
+        }
+      });
+    } catch (err) {
+      console.error('Error creating chart:', err);
+      
+      // Fallback for chart creation error
+      if (chartCanvas) {
+        chartCanvas.getContext('2d').clearRect(0, 0, chartCanvas.width, chartCanvas.height);
+        chartCanvas.insertAdjacentHTML('afterend', 
+          `<div class="chart-fallback" style="text-align: center; padding: 20px;">
+             <i class="fas fa-chart-line" style="color: var(--primary); font-size: 2rem; margin-bottom: 0.5rem;"></i>
+             <p>No scan history available to display</p>
+           </div>`
+        );
+      }
+    }
+  } else {
+    // Handle case when no scan data is available
+    if (chartCanvas) {
+      chartCanvas.getContext('2d').clearRect(0, 0, chartCanvas.width, chartCanvas.height);
+      chartCanvas.insertAdjacentHTML('afterend', 
+        `<div class="chart-fallback" style="text-align: center; padding: 20px;">
+           <i class="fas fa-chart-line" style="color: var(--primary); font-size: 2rem; margin-bottom: 0.5rem;"></i>
+           <p>No scan history available to display</p>
+         </div>`
+      );
+    }
+  }
+}
+
+// Initialize event listeners
+document.addEventListener('DOMContentLoaded', () => {
+  // Show landing page for unauthenticated users
+  const isAuthenticated = window.auth && window.auth.currentUser();
+  const landingPage = document.getElementById('landing-page');
+  const appContainer = document.getElementById('app-container');
+  const authContainer = document.getElementById('auth-container');
+  
+  if (!isAuthenticated && landingPage) {
+    landingPage.style.display = 'block';
+    appContainer.style.display = 'none';
+    authContainer.style.display = 'none';
+    document.body.classList.add('landing-mode');
+    
+    // Mobile menu functionality
+    const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+    const landingNav = document.querySelector('.landing-nav');
+    
+    if (mobileMenuToggle) {
+      mobileMenuToggle.addEventListener('click', () => {
+        landingNav.classList.toggle('show');
+        mobileMenuToggle.querySelector('i').classList.toggle('fa-bars');
+        mobileMenuToggle.querySelector('i').classList.toggle('fa-times');
+      });
+      
+      // Close menu when clicking navigation items
+      const navLinks = landingNav.querySelectorAll('a');
+      navLinks.forEach(link => {
+        link.addEventListener('click', () => {
+          landingNav.classList.remove('show');
+          mobileMenuToggle.querySelector('i').classList.remove('fa-times');
+          mobileMenuToggle.querySelector('i').classList.add('fa-bars');
+        });
+      });
+    }
+  }
+  
+  // Add landing page auth navigation
+  const landingLoginBtn = document.getElementById('landing-login-btn');
+  const landingSignupBtn = document.getElementById('landing-signup-btn');
+  const heroSignupBtn = document.getElementById('hero-signup-btn');
+  const ctaSignupBtn = document.getElementById('cta-signup-btn');
+  
+  if (landingLoginBtn) {
+    landingLoginBtn.addEventListener('click', () => {
+      showLoginForm();
+      document.getElementById('landing-page').style.display = 'none';
+      document.getElementById('auth-container').style.display = 'flex';
+    });
+  }
+  
+  if (landingSignupBtn) {
+    landingSignupBtn.addEventListener('click', () => {
+      showRegisterForm();
+      document.getElementById('landing-page').style.display = 'none';
+      document.getElementById('auth-container').style.display = 'flex';
+    });
+  }
+  
+  if (heroSignupBtn) {
+    heroSignupBtn.addEventListener('click', () => {
+      showRegisterForm();
+      document.getElementById('landing-page').style.display = 'none';
+      document.getElementById('auth-container').style.display = 'flex';
+    });
+  }
+  
+  if (ctaSignupBtn) {
+    ctaSignupBtn.addEventListener('click', () => {
+      showRegisterForm();
+      document.getElementById('landing-page').style.display = 'none';
+      document.getElementById('auth-container').style.display = 'flex';
+    });
+  }
+  
+  // Handle demo button click
+  const demoBtn = document.getElementById('hero-demo-btn');
+  if (demoBtn) {
+    demoBtn.addEventListener('click', () => {
+      // You can show a demo video modal here
+      alert('Demo functionality coming soon!');
+    });
+  }
+  
+  // Check for auth confirmation in URL
+  const hash = window.location.hash;
+  if (hash.includes('access_token=') || hash.includes('refresh_token=')) {
+    // Remove the hash to clean the URL
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+  
+  // AI Chat submit button
+  const aiSubmitBtn = document.getElementById('ai-submit-button');
+  if (aiSubmitBtn) {
+    aiSubmitBtn.addEventListener('click', submitAIQuestion);
+  }
+  
+  // AI Chat input enter key
+  const aiQuestionInput = document.getElementById('ai-question-input');
+  if (aiQuestionInput) {
+    aiQuestionInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        submitAIQuestion();
+      }
+    });
+  }
+  
+  // Theme toggle
+  const themeToggle = document.getElementById('theme-toggle');
+  if (themeToggle) {
+    themeToggle.addEventListener('click', toggleTheme);
+  }
+  
+  // Hide macronutrient section initially
+  if (macroSection) {
+    macroSection.style.display = 'none';
+  }
+  
+  // Reset daily scan count if needed
+  if (window.auth.currentUser()) {
+    window.auth.resetDailyScanCount();
+  }
+  
+  // Load ads
+  loadAds();
+  
+  // Additional landing page animations
+  document.addEventListener('DOMContentLoaded', function() {
+    // Add scroll animations to landing page elements
+    if (document.querySelector('.landing-page')) {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('animate-in');
+          }
+        });
+      }, {
+        threshold: 0.1
+      });
+      
+      document.querySelectorAll('.feature-card, .step-card, .testimonial-card, .section-header').forEach(el => {
+        el.classList.add('animate-item');
+        observer.observe(el);
+      });
+    }
+    
+    // Make device mockup interactive
+    const deviceMockup = document.querySelector('.device-mockup');
+    if (deviceMockup) {
+      deviceMockup.addEventListener('mousemove', (e) => {
+        const rect = deviceMockup.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / rect.width - 0.5;
+        const y = (e.clientY - rect.top) / rect.height - 0.5;
+        
+        deviceMockup.style.transform = `rotate(${-5 + x * 5}deg) translateY(${-20 + y * 10}px)`;
+      });
+      
+      deviceMockup.addEventListener('mouseleave', () => {
+        deviceMockup.style.transform = 'rotate(-5deg) translateY(-20px)';
+      });
+    }
+  });
+  
+  // Dashboard link
+  const dashboardLink = document.getElementById('dashboard-link');
+  if (dashboardLink) {
+    dashboardLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      showDashboard();
+    });
+  }
+}); 

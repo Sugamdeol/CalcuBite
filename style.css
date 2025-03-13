@@ -174,15 +174,21 @@ a:hover {
 .logo {
   width: 3rem;
   height: 3rem;
-  background: linear-gradient(135deg, var(--primary), var(--secondary));
-  color: white;
-  border-radius: var(--radius-full);
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
   box-shadow: var(--shadow-md);
   animation: float 3s infinite ease-in-out;
+  overflow: hidden;
+}
+
+.logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 12px;
 }
 
 @keyframes float {
@@ -478,7 +484,7 @@ a:hover {
 .spinner {
   width: 3rem;
   height: 3rem;
-  border: 0.25rem solid rgba(79, 70, 229, 0.1);
+  border: 0.25rem solid rgba(0, 0, 0, 0.1);
   border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
@@ -1013,6 +1019,17 @@ a:hover {
 .site-footer p {
   color: var(--text-tertiary);
   margin-bottom: 0.5rem;
+}
+
+.site-footer a {
+  color: var(--primary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.site-footer a:hover {
+  color: var(--primary-dark);
+  text-decoration: underline;
 }
 
 .site-footer .fas.fa-heart {
@@ -3116,7 +3133,7 @@ input:checked + .slider:before {
 /* CTA Section Enhancement */
 .cta-section {
   padding: 6rem 0;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
   position: relative;
   overflow: hidden;
 }
@@ -3424,4 +3441,153 @@ input:checked + .slider:before {
   .testimonial-card {
     padding: 1.5rem;
   }
+}
+
+/* Goal styles */
+.goals-container {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+@media (min-width: 768px) {
+  .goals-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.goal-card {
+  background-color: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-fast);
+  border-left: 4px solid var(--primary);
+}
+
+.goal-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+}
+
+.goal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.goal-header h4 {
+  margin: 0;
+  font-size: 1.125rem;
+  color: var(--primary);
+}
+
+.delete-goal {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.delete-goal:hover {
+  color: var(--danger);
+}
+
+.goal-details {
+  margin-bottom: 1rem;
+}
+
+.goal-details p {
+  margin: 0.5rem 0;
+  font-size: 0.9375rem;
+}
+
+.goal-progress {
+  margin-top: 0.75rem;
+}
+
+.goal-progress .progress-bar {
+  margin-bottom: 0.5rem;
+}
+
+.add-goal-card {
+  background-color: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--border-color);
+  transition: all var(--transition-fast);
+}
+
+.add-goal-card:hover {
+  border-color: var(--primary);
+  background-color: rgba(79, 70, 229, 0.05);
+}
+
+/* Goal alignment styles */
+.goal-alignment {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.alignment-card {
+  background-color: var(--bg-secondary);
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.alignment-card.good-alignment {
+  border-left: 4px solid var(--success);
+}
+
+.alignment-card.neutral-alignment {
+  border-left: 4px solid var(--primary);
+}
+
+.alignment-card.poor-alignment {
+  border-left: 4px solid var(--danger);
+}
+
+.alignment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.alignment-header h4 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.alignment-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.good-badge {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+}
+
+.neutral-badge {
+  background-color: rgba(79, 70, 229, 0.1);
+  color: var(--primary);
+}
+
+.poor-badge {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
 }
