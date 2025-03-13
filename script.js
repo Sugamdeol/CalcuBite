@@ -2473,13 +2473,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   
-  // Check for auth confirmation in URL
-  const hash = window.location.hash;
-  if (hash.includes('access_token=') || hash.includes('refresh_token=')) {
-    // Remove the hash to clean the URL
-    window.history.replaceState(null, '', window.location.pathname + window.location.search);
-  }
-  
   // AI Chat submit button
   const aiSubmitBtn = document.getElementById('ai-submit-button');
   if (aiSubmitBtn) {
@@ -2560,4 +2553,89 @@ document.addEventListener('DOMContentLoaded', () => {
       showDashboard();
     });
   }
-}); 
+});
+
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(registration => {
+        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+      }).catch(error => {
+        console.log('ServiceWorker registration failed: ', error);
+      });
+  });
+}
+
+// Create a variable to track if installation prompt has been shown
+let deferredPrompt;
+
+// Listen for beforeinstallprompt event
+window.addEventListener('beforeinstallprompt', (e) => {
+  // Prevent Chrome 67 and earlier from automatically showing the prompt
+  e.preventDefault();
+  // Stash the event so it can be triggered later
+  deferredPrompt = e;
+  
+  // Show install banner after 3 seconds
+  setTimeout(() => {
+    showInstallBanner();
+  }, 3000);
+});
+
+// Function to show install banner
+function showInstallBanner() {
+  if (!deferredPrompt) return;
+  
+  // Check if banner already exists
+  if (document.getElementById('install-banner')) return;
+  
+  // Create install banner
+  const banner = document.createElement('div');
+  banner.id = 'install-banner';
+  banner.className = 'install-banner';
+  banner.innerHTML = `
+    <div class="install-content">
+      <img src="/6233209994745069536_120.jpg" alt="CalcuBite Icon" width="40" height="40">
+      <div class="install-text">
+        <strong>Add CalcuBite to Home Screen</strong>
+        <span>Install for a better experience</span>
+      </div>
+    </div>
+    <div class="install-actions">
+      <button id="install-later">Later</button>
+      <button id="install-now" class="primary-button">Install</button>
+    </div>
+    <button id="close-install-banner" aria-label="Close"><i class="fas fa-times"></i></button>
+  `;
+  
+  document.body.appendChild(banner);
+  
+  // Add event listeners to buttons
+  document.getElementById('install-now').addEventListener('click', () => {
+    // Hide the banner
+    banner.style.display = 'none';
+    
+    // Show the installation prompt
+    deferredPrompt.prompt();
+    
+    // Wait for the user to respond to the prompt
+    deferredPrompt.userChoice.then((choiceResult) => {
+      if (choiceResult.outcome === 'accepted') {
+        console.log('User accepted the install prompt');
+      } else {
+        console.log('User dismissed the install prompt');
+      }
+      // Clear the saved prompt since it can't be used again
+      deferredPrompt = null;
+    });
+  });
+  
+  document.getElementById('install-later').addEventListener('click', () => {
+    banner.style.display = 'none';
+  });
+  
+  document.getElementById('close-install-banner').addEventListener('click', () => {
+    banner.style.display = 'none';
+  });
+}

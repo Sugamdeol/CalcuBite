@@ -3591,3 +3591,112 @@ input:checked + .slider:before {
   background-color: rgba(239, 68, 68, 0.1);
   color: var(--danger);
 }
+
+/* Install Banner Styles */
+.install-banner {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 500px;
+  background-color: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px 20px;
+  z-index: 1000;
+  animation: slideUp 0.5s ease;
+  border: 1px solid var(--border-color);
+}
+
+.install-content {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.install-content img {
+  border-radius: 8px;
+}
+
+.install-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.install-text strong {
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.install-text span {
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+}
+
+.install-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.install-actions button {
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+#install-later {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+}
+
+#close-install-banner {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  padding: 5px;
+  margin-left: 10px;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 100%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@media (max-width: 480px) {
+  .install-banner {
+    flex-direction: column;
+    padding: 15px;
+    gap: 15px;
+  }
+  
+  .install-content {
+    width: 100%;
+  }
+  
+  .install-actions {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  #close-install-banner {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    margin: 0;
+  }
+}
