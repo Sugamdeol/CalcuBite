@@ -225,7 +225,7 @@ async function logScan(scanType, scanData) {
         user_id: window.auth.currentUser().id,
         scan_type: scanType,
         scan_data: {
-          rating: scanData.rating,
+          rating: scanData.rating || 5,  
           timestamp: new Date().toISOString(),
           items: scanData.items || []
         }
@@ -262,8 +262,8 @@ async function analyzeImage(base64Image) {
           adModal.style.display = 'block';
           
           // Simulate ad playback
-          let adDuration = 10; // Reduced for testing
-          let skipDuration = 3; // Reduced for testing
+          let adDuration = 10; 
+          let skipDuration = 3; 
           
           // Update ad timer every second
           const adInterval = setInterval(() => {
@@ -637,6 +637,9 @@ Your response MUST be valid JSON with this structure:
     throw new Error('Error parsing response: ' + parseError.message);
   }
   
+  // Store actual analysis data rating from API response
+  const actualRating = data.rating;
+
   // Display the results
   displayResults(analysisData);
   loadingDiv.style.display = 'none';
@@ -644,7 +647,7 @@ Your response MUST be valid JSON with this structure:
   // Log the scan to the database if authenticated
   if (window.auth.currentUser()) {
     logScan(currentMode, {
-      rating: analysisData?.rating || 5,
+      rating: actualRating || 5,
       timestamp: new Date().toISOString(),
       items: analysisData?.foodIdentification?.mainItems || []
     });
@@ -658,9 +661,6 @@ function displayResults(data) {
   resultsDiv.style.display = 'block';
   errorDiv.style.display = 'none';
   
-  // Store actual analysis data rating from API response
-  const actualRating = data.rating;
-
   // Health Score with more visual elements
   const healthScoreEl = document.getElementById('healthScore');
   const rating = data.rating || 'N/A';
@@ -1244,7 +1244,7 @@ function displayResults(data) {
   // Log the scan to the database if authenticated
   if (window.auth.currentUser()) {
     logScan(currentMode, {
-      rating: actualRating || 5,
+      rating: data.rating || 5,
       timestamp: new Date().toISOString(),
       items: data?.foodIdentification?.mainItems || []
     });
@@ -1371,9 +1371,9 @@ function createMacronutrientChart(data) {
       datasets: [{
         data: [macroRatio.protein, macroRatio.carbs, macroRatio.fat],
         backgroundColor: [
-          'rgba(79, 70, 229, 0.8)',  // Primary
-          'rgba(14, 165, 233, 0.8)', // Secondary
-          'rgba(245, 158, 11, 0.8)'  // Warning
+          'rgba(79, 70, 229, 0.8)',  
+          'rgba(14, 165, 233, 0.8)', 
+          'rgba(245, 158, 11, 0.8)'  
         ],
         borderColor: [
           'rgba(79, 70, 229, 1)',
@@ -1778,7 +1778,7 @@ function updateDashboardUI() {
   // Update recent scans list
   const recentScansList = document.getElementById('recent-scans-list');
   const noScansPlaceholder = document.getElementById('no-scans-placeholder');
-  
+
   if (recentScansList) {
     if (userDashboardData.scans.length > 0 && noScansPlaceholder) {
       noScansPlaceholder.style.display = 'none';
@@ -2011,6 +2011,22 @@ async function saveGoal() {
     
     if (!window.auth.currentUser()) {
       alert('You must be logged in to save goals.');
+      return;
+    }
+    
+    // Check for duplicate goal prevention
+    const { data: existingGoals, error: checkError } = await supabase
+      .from('health_goals')
+      .select('id')
+      .eq('user_id', window.auth.currentUser().id)
+      .eq('goal_type', goalType)
+      .eq('target', target);
+      
+    if (checkError) throw checkError;
+    
+    // If duplicate found, alert and exit
+    if (existingGoals && existingGoals.length > 0) {
+      alert('You already have this goal in your dashboard.');
       return;
     }
     

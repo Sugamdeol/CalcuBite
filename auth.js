@@ -120,7 +120,7 @@ function updateUIForUser() {
     userAvatarElem.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userNameElem.textContent)}&background=random`;
   }
   
-  // Show admin link if user is admin
+  // Show admin link if user is admin but don't rely only on frontend permission
   if (adminLinkElem) {
     if (userProfile?.is_admin) {
       adminLinkElem.style.display = 'flex';
