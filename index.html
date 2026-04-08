@@ -25,7 +25,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
 </head>
 <body>
     <!-- Landing Page (for unauthenticated users) -->
@@ -386,9 +385,6 @@
                     </div>
                 </div>
                 <div class="user-menu">
-                    <div class="feature-badge" id="upgrade-badge">
-                        <i class="fas fa-ad"></i> <span>Ad-Supported</span>
-                    </div>
                     <div class="user-profile" id="user-profile">
                         <img src="https://ui-avatars.com/api/?name=User&background=random" alt="User" id="user-avatar">
                         <span id="user-name">User</span>
@@ -406,22 +402,10 @@
                 </button>
             </div>
         </header>
-        <div class="ad-container" data-placement="header"></div>
         
         <!-- Main Content -->
         <main class="main-content">
             <div class="container">
-                <!-- Ad container at the top of the content -->
-                <div class="ad-container" data-placement="in-content"></div>
-                
-                <!-- Premium features notification -->
-                <div id="premium-notification" class="premium-notification" style="display: none;">
-                    <i class="fas fa-ad"></i>
-                    <p>You've reached your scan limit. Watch an ad to get more scans!</p>
-                    <button id="watch-ad-button" class="watch-ad-button">
-                        <i class="fas fa-play-circle"></i> Watch Ad to Continue
-                    </button>
-                </div>
                 
                 <div class="content-grid">
                     <!-- Input Panel -->
@@ -490,7 +474,6 @@
                     </section>
 
                     <!-- Results Panel -->
-                    <div class="ad-container" data-placement="results"></div>
                     <section class="results-panel" id="results">
                         <div class="panel-content">
                             <div class="panel-header">
@@ -622,7 +605,6 @@
         </main>
 
         <!-- Footer -->
-        <div class="ad-container" data-placement="footer"></div>
         <footer class="site-footer">
             <div class="container">
                 <p>&copy; 2025 CalcuBite AI. Made with <i class="fas fa-heart"></i> by ByteBuildrz</p>
@@ -643,7 +625,6 @@
                 <div class="admin-tabs">
                     <button class="admin-tab active" data-tab="users">Users</button>
                     <button class="admin-tab" data-tab="analytics">Analytics</button>
-                    <button class="admin-tab" data-tab="ads">Ad Management</button>
                     <button class="admin-tab" data-tab="settings">Settings</button>
                 </div>
                 
@@ -706,15 +687,6 @@
                                 <p id="total-scans">0</p>
                             </div>
                         </div>
-                        <div class="analytics-card">
-                            <div class="analytics-icon">
-                                <i class="fas fa-ad"></i>
-                            </div>
-                            <div class="analytics-data">
-                                <h4>Ads Watched</h4>
-                                <p id="ads-watched">0</p>
-                            </div>
-                        </div>
                     </div>
                     <div class="chart-container">
                         <canvas id="users-chart"></canvas>
@@ -728,39 +700,6 @@
                     </div>
                 </div>
                 
-                <div id="ads-tab" class="admin-tab-content">
-                    <h3>Ad Management</h3>
-                    <div class="ad-controls">
-                        <!-- The placement-manager-button will be added here via JavaScript -->
-                        <button id="add-ad-button" class="primary-button">
-                            <i class="fas fa-plus"></i> Add New Ad
-                        </button>
-                    </div>
-                    <div class="ad-settings">
-                        <div class="form-group">
-                            <label for="adsense-publisher-id">Google AdSense Publisher ID (Optional)</label>
-                            <input type="text" id="adsense-publisher-id" placeholder="ca-pub-XXXXXXXXXXXXXXXX">
-                            <small>Changing this will update the AdSense script on the page</small>
-                        </div>
-                        <button id="save-adsense-id" class="secondary-button">Save AdSense ID</button>
-                    </div>
-                    <table class="admin-table">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Name</th>
-                                <th>Provider</th>
-                                <th>Placement</th>
-                                <th>Type</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="ads-table-body">
-                            <!-- Ad data will be loaded here -->
-                        </tbody>
-                    </table>
-                </div>
                 
                 <div id="settings-tab" class="admin-tab-content">
                     <h3>System Settings</h3>
@@ -768,17 +707,6 @@
                         <div class="form-group">
                             <label>Free Tier Scans Per Day</label>
                             <input type="number" id="free-scans" value="5">
-                        </div>
-                        <div class="form-group">
-                            <label>Ad Unlock Duration (hours)</label>
-                            <input type="number" id="ad-duration" value="24">
-                        </div>
-                        <div class="form-group">
-                            <label>Enable Ad System</label>
-                            <label class="switch">
-                                <input type="checkbox" id="enable-ads" checked>
-                                <span class="slider round"></span>
-                            </label>
                         </div>
                         <div class="form-group">
                             <label>Enable User Registration</label>
@@ -863,48 +791,11 @@
                         <button type="submit" class="primary-button">Update Profile</button>
                     </form>
                     
-                    <div class="subscription-section">
-                        <h3>Ad Settings</h3>
-                        <p>This application is supported by ads. Watching an ad grants you additional scans.</p>
-                        <div class="ad-settings">
-                            <div class="ad-setting-item">
-                                <h4>Scans per day</h4>
-                                <p>You can perform up to 5 scans per day for free.</p>
-                            </div>
-                            <div class="ad-setting-item">
-                                <h4>Ad rewards</h4>
-                                <p>Each ad you watch gives you one scan.</p>
-                            </div>
-                            <button id="watch-ad-now" class="primary-button">
-                                <i class="fas fa-play-circle"></i> Watch Ad Now
-                            </button>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Ad Modal -->
-    <div id="ad-modal" class="modal">
-        <div class="modal-content ad-modal-content">
-            <div class="modal-header">
-                <h2><i class="fas fa-ad"></i> Sponsored Content</h2>
-                <span id="ad-timer">30s</span>
-            </div>
-            <div class="modal-body">
-                <div id="ad-container" class="ad-container">
-                    <div class="ad-placeholder">
-                        <i class="fas fa-video"></i>
-                        <p>Ad is loading...</p>
-                    </div>
-                </div>
-                <button id="ad-skip-button" class="ad-skip-button" disabled>
-                    Skip in <span id="skip-timer">5</span>
-                </button>
-            </div>
-        </div>
-    </div>
 
     <!-- Login/Register Templates -->
     <template id="login-template">

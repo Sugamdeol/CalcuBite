@@ -241,85 +241,11 @@ async function analyzeImage(base64Image) {
   // Check if user can perform a scan
   if (window.auth.currentUser()) {
     try {
-      const adWatchedTime = window.auth.lastAdWatched() ? new Date(window.auth.lastAdWatched()) : null;
-      const now = new Date();
-      const needsAd = !adWatchedTime || ((now - adWatchedTime) / (1000 * 60 * 60)) >= 24;
-      
-      if (needsAd) {
-        // Show ad before analysis
-        await new Promise((resolve) => {
-          const adModal = document.getElementById('ad-modal');
-          const adTimerElement = document.getElementById('ad-timer');
-          const skipButton = document.getElementById('ad-skip-button');
-          const skipTimerElement = document.getElementById('skip-timer');
-          
-          if (!adModal || !adTimerElement || !skipButton || !skipTimerElement) {
-            console.error('Ad elements not found');
-            resolve();
-            return;
-          }
-          
-          // Show ad modal
-          adModal.style.display = 'block';
-          
-          // Simulate ad playback
-          let adDuration = 10; 
-          let skipDuration = 3; 
-          
-          // Update ad timer every second
-          const adInterval = setInterval(() => {
-            adTimerElement.textContent = `${adDuration}s`;
-            adDuration--;
-            
-            if (adDuration < 0) {
-              clearInterval(adInterval);
-              completeAd();
-            }
-          }, 1000);
-          
-          // Update skip timer
-          const skipInterval = setInterval(() => {
-            skipTimerElement.textContent = skipDuration;
-            skipDuration--;
-            
-            if (skipDuration < 0) {
-              clearInterval(skipInterval);
-              skipButton.disabled = false;
-              skipButton.textContent = 'Skip Ad';
-            }
-          }, 1000);
-          
-          // Skip button event
-          skipButton.addEventListener('click', function skipHandler() {
-            if (!skipButton.disabled) {
-              clearInterval(adInterval);
-              clearInterval(skipInterval);
-              skipButton.removeEventListener('click', skipHandler);
-              completeAd();
-            }
-          });
-          
-          // Complete ad function
-          async function completeAd() {
-            // Hide ad modal
-            adModal.style.display = 'none';
-            
-            // Update user profile with ad watched time and reset scans
-            if (window.auth.currentUser()) {
-              await window.auth.watchAd();
-            }
-            
-            resolve();
-          }
-        });
-      }
-      
       const canScan = await window.auth.updateScansRemaining(1);
       if (!canScan) {
-        // Show ad notification if user can't scan
-        const premiumNotification = document.getElementById('premium-notification');
-        if (premiumNotification) premiumNotification.style.display = 'flex';
         loadingDiv.style.display = 'none';
+        errorDiv.style.display = 'block';
+        errorDiv.textContent = 'You have reached your daily scan limit.';
         return;
       }
     } catch (error) {
@@ -1619,6 +1545,15 @@ If the user asks about something not related to nutrition or health, politely re
 
 // Show dashboard functionality
 function showDashboard() {
+  // AI Personalization check: If profile is not complete, prompt user
+  const profile = window.auth.userProfile();
+  if (profile && (!profile.gender || !profile.age || !profile.weight_kg)) {
+    if (confirm("Your profile is incomplete. Would you like to fill it out now to enable AI-calculated daily nutritional limits?")) {
+        showProfileModal();
+        return;
+    }
+  }
+
   try {
     // Create dashboard modal if it doesn't exist
     let dashboardModal = document.getElementById('dashboard-modal');
@@ -2280,186 +2215,6 @@ function toggleTheme() {
   }
 }
 
-// Load ads
-async function loadAds() {
-  try {
-    const sb = window.supabase_client;
-    // Get active ads for each placement
-    const { data, error } = await sb
-      .from('ads')
-      .select('*')
-      .eq('active', true)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error loading ads:', error);
-      return;
-    }
-    
-    if (!data || data.length === 0) {
-      return;
-    }
-    
-    // Group ads by placement
-    const adsByPlacement = {};
-    data.forEach(ad => {
-      const placement = ad.placement || 'in-content';
-      if (!adsByPlacement[placement]) {
-        adsByPlacement[placement] = [];
-      }
-      adsByPlacement[placement].push(ad);
-    });
-    
-    // Display ads in their designated placements
-    Object.keys(adsByPlacement).forEach(placement => {
-      const adContainers = document.querySelectorAll(`.ad-container[data-placement="${placement}"]`);
-      if (adContainers.length === 0) return;
-      
-      // Randomly select an ad for this placement
-      const randomIndex = Math.floor(Math.random() * adsByPlacement[placement].length);
-      const ad = adsByPlacement[placement][randomIndex];
-      
-      adContainers.forEach(container => {
-        if (ad.provider === 'custom') {
-          // Display custom ad
-          container.innerHTML = '';
-          if (ad.type === 'banner' && ad.file_url) {
-            container.innerHTML = `
-              <div class="custom-ad ${ad.size || 'medium'}" data-ad-id="${ad.id}">
-                <img src="${ad.file_url}" alt="${ad.name}" class="ad-image">
-              </div>
-            `;
-          } else if (ad.type === 'video' && ad.file_url) {
-            container.innerHTML = `
-              <div class="custom-ad ${ad.size || 'medium'}" data-ad-id="${ad.id}">
-                <video controls class="ad-video">
-                  <source src="${ad.file_url}" type="video/mp4">
-                  Your browser does not support the video tag.
-                </video>
-              </div>
-            `;
-          }
-          
-          // Log impression
-          logAdImpression(ad.id);
-          
-        } else if (ad.ad_code) {
-          // Display ad from external provider using ad code
-          const adWrapper = document.createElement('div');
-          adWrapper.className = 'external-ad-wrapper';
-          adWrapper.dataset.adId = ad.id;
-          
-          // Insert the ad code safely
-          adWrapper.innerHTML = ad.ad_code;
-          
-          // Clear and append
-          container.innerHTML = '';
-          container.appendChild(adWrapper);
-          
-          // Execute any scripts in the ad code
-          const scripts = adWrapper.querySelectorAll('script');
-          scripts.forEach(oldScript => {
-            const newScript = document.createElement('script');
-            
-            // Copy all attributes
-            Array.from(oldScript.attributes).forEach(attr => {
-              newScript.setAttribute(attr.name, attr.value);
-            });
-            
-            // Copy inline script content
-            newScript.textContent = oldScript.textContent;
-            
-            // Replace old script with new one to execute it
-            oldScript.parentNode.replaceChild(newScript, oldScript);
-          });
-          
-          // Log impression
-          logAdImpression(ad.id);
-        }
-      });
-    });
-    
-  } catch (error) {
-    console.error('Error in loadAds:', error);
-  }
-}
-
-// Log ad impression
-async function logAdImpression(adId) {
-  if (!window.auth || !window.auth.currentUser()) return;
-  
-  const sb = window.supabase_client;
-  try {
-    await sb
-      .from('ads')
-      .update({ impressions: sb.rpc('increment', { count: 1 }) })
-      .eq('id', adId);
-    
-    // Also log in analytics
-    await sb
-      .from('analytics')
-      .insert([{
-        user_id: window.auth.currentUser().id,
-        event_type: 'ad_impression',
-        event_data: { ad_id: adId }
-      }]);
-  } catch (error) {
-    console.error('Error logging ad impression:', error);
-  }
-}
-
-// Log ad click
-async function logAdClick(adId) {
-  if (!window.auth || !window.auth.currentUser()) return;
-  
-  const sb = window.supabase_client;
-  try {
-    await sb
-      .from('ads')
-      .update({ clicks: sb.rpc('increment', { count: 1 }) })
-      .eq('id', adId);
-    
-    // Also log in analytics
-    await sb
-      .from('analytics')
-      .insert([{
-        user_id: window.auth.currentUser().id,
-        event_type: 'ad_click',
-        event_data: { ad_id: adId }
-      }]);
-  } catch (error) {
-    console.error('Error logging ad click:', error);
-  }
-}
-
-// Add event listeners for ad clicks
-document.addEventListener('click', function(e) {
-  const adElement = e.target.closest('.custom-ad');
-  if (adElement) {
-    const adId = adElement.dataset.adId;
-    if (adId) {
-      logAdClick(adId);
-    }
-  }
-});
-
-// Check if user has watched an ad recently
-function checkAdUnlock() {
-  if (!premiumNotification) return;
-  
-  const now = new Date();
-  const adWatchedTime = lastAdWatched ? new Date(lastAdWatched) : null;
-  
-  // Ad unlocks features for 24 hours
-  if (adWatchedTime && ((now - adWatchedTime) / (1000 * 60 * 60)) < 24) {
-    premiumNotification.style.display = 'none';
-    return true; // User has active ad benefit
-  } else {
-    premiumNotification.style.display = 'flex';
-    return false; // User needs to watch ad
-  }
-}
-
 // Create consumption history chart
 function createConsumptionChart() {
   const chartCanvas = document.getElementById('consumption-history-chart');
@@ -2754,9 +2509,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (window.auth && window.auth.currentUser && window.auth.currentUser()) {
     window.auth.resetDailyScanCount();
   }
-  
-  // Load ads
-  loadAds();
   
   // Additional landing page animations
   // Add scroll animations to landing page elements

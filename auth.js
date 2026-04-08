@@ -16,21 +16,17 @@ const resetPasswordTemplate = document.getElementById('reset-password-template')
 const userProfileElem = document.getElementById('user-profile');
 const userNameElem = document.getElementById('user-name');
 const userAvatarElem = document.getElementById('user-avatar');
-const userTierElem = document.getElementById('user-tier');
 const adminLinkElem = document.getElementById('admin-link');
-const premiumNotification = document.getElementById('premium-notification');
 
 // Global user state
 let currentUser = null;
 let userProfile = null;
-let lastAdWatched = null;
 
 // Initialize window.auth early with basic getters
 window.auth = {
   currentUser: () => currentUser,
   userProfile: () => userProfile,
-  lastAdWatched: () => lastAdWatched,
-  isPremium: () => false,
+  isPremium: () => true,
   getNutritionalGoals: () => userProfile?.nutritional_goals || {
     calories: 2000,
     protein: 50,
@@ -112,7 +108,6 @@ async function fetchUserProfile() {
   }
   
   userProfile = data;
-  lastAdWatched = data.last_ad_watched;
 }
 
 // Create new user profile
@@ -186,23 +181,6 @@ function updateUIForUser() {
     }
   }
   
-  // Check if features should be unlocked by ad viewing
-  checkAdUnlock();
-}
-
-// Check if user has watched an ad recently
-function checkAdUnlock() {
-  if (!premiumNotification) return;
-  
-  const now = new Date();
-  const adWatchedTime = lastAdWatched ? new Date(lastAdWatched) : null;
-  
-  // Ad unlocks features for 24 hours
-  if (adWatchedTime && ((now - adWatchedTime) / (1000 * 60 * 60)) < 24) {
-    premiumNotification.style.display = 'none';
-  } else {
-    premiumNotification.style.display = 'flex';
-  }
 }
 
 // Show the landing page
@@ -509,231 +487,14 @@ function calculatePasswordStrength(password) {
   return { score: score, label, color };
 }
 
-// Watch ad to unlock premium features temporarily
-async function watchAd() {
-  try {
-    const adModal = document.getElementById('ad-modal');
-    
-    if (!adModal) {
-      console.error('Ad modal element not found');
-      return;
-    }
-    
-    const adTimerElement = document.getElementById('ad-timer');
-    const skipButton = document.getElementById('ad-skip-button');
-    const skipTimerElement = document.getElementById('skip-timer');
-    
-    if (!adTimerElement || !skipButton || !skipTimerElement) {
-      console.error('Ad elements not found');
-      return;
-    }
-    
-    // Show ad modal
-    adModal.style.display = 'block';
-  
-    // Simulate ad playback
-    let adDuration = 10; 
-    let skipDuration = 3; 
-    
-    // Update ad timer every second
-    const adInterval = setInterval(() => {
-      adTimerElement.textContent = `${adDuration}s`;
-      adDuration--;
-      
-      if (adDuration < 0) {
-        clearInterval(adInterval);
-        completeAd();
-      }
-    }, 1000);
-    
-    // Update skip timer
-    const skipInterval = setInterval(() => {
-      skipTimerElement.textContent = skipDuration;
-      skipDuration--;
-      
-      if (skipDuration < 0) {
-        clearInterval(skipInterval);
-        skipButton.disabled = false;
-        skipButton.textContent = 'Skip Ad';
-      }
-    }, 1000);
-    
-    // Skip button event
-    skipButton.addEventListener('click', function skipHandler() {
-      if (!skipButton.disabled) {
-        clearInterval(adInterval);
-        clearInterval(skipInterval);
-        skipButton.removeEventListener('click', skipHandler);
-        completeAd();
-      }
-    });
-    
-    // Complete ad function
-    async function completeAd() {
-      // Hide ad modal
-      adModal.style.display = 'none';
-      
-      // Update user profile
-      lastAdWatched = new Date().toISOString();
-      
-      // Update in database
-      if (currentUser) {
-        const { error } = await supabase_client
-          .from('profiles')
-          .update({ 
-            last_ad_watched: lastAdWatched,
-            scans_remaining: 999 
-          })
-          .eq('id', currentUser.id);
-        
-        if (error) {
-          console.error('Error updating ad watched time:', error);
-        }
-        
-        // Update analytics
-        try {
-          const { error: analyticsError } = await supabase_client
-            .from('analytics')
-            .insert([{
-              user_id: currentUser.id,
-              event_type: 'ad_watched',
-              event_data: {}
-            }]);
-          
-          if (analyticsError) {
-            console.error('Error logging analytics:', analyticsError);
-          }
-        } catch (analyticsEx) {
-          console.error('Exception logging analytics:', analyticsEx);
-        }
-      }
-      
-      // Update local user profile
-      if (userProfile) {
-        userProfile.last_ad_watched = lastAdWatched;
-        userProfile.scans_remaining = 999; 
-      }
-      
-      // Hide premium notification
-      const premiumNotification = document.getElementById('premium-notification');
-      if (premiumNotification) {
-        premiumNotification.style.display = 'none';
-      }
-      
-      // Show success notification
-      alert('Thank you for watching! Unlimited scans unlocked for 24 hours.');
-    }
-  } catch (error) {
-    console.error('Error showing ad:', error);
-    alert('An error occurred while trying to show the ad. Please try again.');
-  }
-}
-
-// Reset user's scan count after watching an ad
-async function resetScansAfterAd() {
-  if (!currentUser) return false;
-  
-  try {
-    // Get the system settings to determine max scans
-    const { data: settingsData, error: settingsError } = await supabase_client
-      .from('system_settings')
-      .select('free_scans_per_day')
-      .single();
-    
-    const defaultScans = 5;
-    const maxScans = settingsData?.free_scans_per_day || defaultScans;
-    
-    // Update the user's scans_remaining to max value
-    const { error } = await supabase_client
-      .from('profiles')
-      .update({ scans_remaining: 999 }) 
-      .eq('id', currentUser.id);
-    
-    if (error) {
-      console.error('Error resetting scans count:', error);
-      return false;
-    }
-    
-    // Update local user profile
-    if (userProfile) {
-      userProfile.scans_remaining = 999;
-    }
-    
-    return true;
-  } catch (error) {
-    console.error('Error in resetScansAfterAd:', error);
-    return false;
-  }
-}
-
 // Update scans remaining for user
 async function updateScansRemaining(scansUsed = 1) {
-  if (!currentUser) return true;
-  
-  // Check if user profile exists
-  if (!userProfile) {
-    await fetchUserProfile();
-    // Create profile if it doesn't exist
-    if (!userProfile) {
-      userProfile = await createUserProfile();
-      if (!userProfile) return false;
-    }
-  }
-  
-  // Ensure scans_remaining has a valid value
-  if (!userProfile.scans_remaining && userProfile.scans_remaining !== 0) {
-    userProfile.scans_remaining = 5;
-  }
-  
-  if (userProfile.scans_remaining <= 0) {
-    // Out of scans, show notification
-    if (premiumNotification) premiumNotification.style.display = 'flex';
-    return false;
-  }
-  
-  const newScansRemaining = userProfile.scans_remaining - scansUsed;
-  
-  try {
-    const { error } = await supabase_client
-      .from('profiles')
-      .update({ scans_remaining: newScansRemaining })
-      .eq('id', currentUser.id);
-    
-    if (error) throw error;
-    
-    userProfile.scans_remaining = newScansRemaining;
-    return true;
-  } catch (error) {
-    console.error('Error updating scans remaining:', error);
-    return false;
-  }
+  return true; // Unlimited for everyone
 }
 
 // Reset daily scan count
 async function resetDailyScanCount() {
-  if (!currentUser) return;
-  
-  const lastReset = new Date(userProfile.last_scan_reset);
-  const now = new Date();
-  const dayDiff = Math.floor((now - lastReset) / (1000 * 60 * 60 * 24));
-  
-  if (dayDiff >= 1) {
-    const { error } = await supabase_client
-      .from('profiles')
-      .update({
-        scans_remaining: 5, 
-        last_scan_reset: now.toISOString()
-      })
-      .eq('id', currentUser.id);
-    
-    if (error) {
-      console.error('Error resetting scan count:', error);
-      return;
-    }
-    
-    userProfile.scans_remaining = 5;
-    userProfile.last_scan_reset = now.toISOString();
-  }
+  // Not needed when unlimited
 }
 
 // Update user profile
@@ -821,22 +582,12 @@ function populateProfileModal() {
 
   if (userProfile?.gender && userProfile?.age && personalizationStatus) {
     personalizationStatus.style.display = 'flex';
-  }
-  
-  // Show/hide plan buttons based on current plan - with null checks
-  if (freePlan) freePlan.classList.add('active-plan');
-  if (proPlan) proPlan.classList.remove('active-plan');
-  if (currentPlanBtn) currentPlanBtn.style.display = 'none';
-  if (upgradePlanBtn) {
-    upgradePlanBtn.style.display = 'block';
-    upgradePlanBtn.textContent = 'Watch Ad Now';
-    upgradePlanBtn.disabled = false;
-  }
-  
-  // Update ad rewards text
-  const adRewardDesc = document.querySelector('.ad-setting-item:nth-child(2) p');
-  if (adRewardDesc) {
-    adRewardDesc.textContent = 'Watching an ad unlocks unlimited scans for 24 hours.';
+    personalizationStatus.innerHTML = '<i class="fas fa-magic"></i> AI Personalization active: Daily limits calculated';
+  } else if (personalizationStatus) {
+    personalizationStatus.style.display = 'flex';
+    personalizationStatus.style.backgroundColor = 'rgba(79, 70, 229, 0.1)';
+    personalizationStatus.style.color = 'var(--primary)';
+    personalizationStatus.innerHTML = '<i class="fas fa-info-circle"></i> Fill your profile to enable AI personalized daily limits';
   }
 
   // Form submission
@@ -960,7 +711,7 @@ function populateProfileModal() {
 
 // Show upgrade modal
 function showUpgradeModal() {
-  watchAd(); 
+  // Not needed
 }
 
 // Initialize event listeners
@@ -999,21 +750,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   
-  // Watch ad button
-  const watchAdButton = document.getElementById('watch-ad-button');
-  if (watchAdButton) {
-    watchAdButton.addEventListener('click', () => {
-      watchAd();
-    });
-  }
-  
-  // Watch ad in profile modal
-  const watchAdNow = document.getElementById('watch-ad-now');
-  if (watchAdNow) {
-    watchAdNow.addEventListener('click', () => {
-      watchAd();
-    });
-  }
   
   // Close modals when clicking outside
   window.addEventListener('click', (e) => {
@@ -1061,11 +797,9 @@ window.auth = {
   checkAuth,
   updateScansRemaining,
   resetDailyScanCount,
-  watchAd,
   currentUser: () => currentUser,
   userProfile: () => userProfile,
-  isPremium: () => false, 
-  lastAdWatched: () => lastAdWatched,
+  isPremium: () => true,
   showLoginForm,
   showRegisterForm,
   getNutritionalGoals: () => userProfile?.nutritional_goals || {
