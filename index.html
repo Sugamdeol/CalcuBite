@@ -916,8 +916,8 @@
             <h2>Login to your account</h2>
             <form id="login-form" class="auth-form">
                 <div class="form-group">
-                    <label for="login-email">Email</label>
-                    <input type="email" id="login-email" placeholder="Your email" required>
+                    <label for="login-username">Username</label>
+                    <input type="text" id="login-username" placeholder="Your username" required>
                 </div>
                 <div class="form-group">
                     <label for="login-password">Password</label>
@@ -954,12 +954,8 @@
             <h2>Create your account</h2>
             <form id="register-form" class="auth-form">
                 <div class="form-group">
-                    <label for="register-name">Full Name</label>
-                    <input type="text" id="register-name" placeholder="Your name" required>
-                </div>
-                <div class="form-group">
-                    <label for="register-email">Email</label>
-                    <input type="email" id="register-email" placeholder="Your email" required>
+                    <label for="register-username">Username</label>
+                    <input type="text" id="register-username" placeholder="Choose a username" required>
                 </div>
                 <div class="form-group">
                     <label for="register-password">Password</label>
@@ -992,8 +988,8 @@
         </div>
     </template>
 
-    <!-- Reset Password Template -->
-    <template id="reset-password-template">
+    <!-- Reset Password Template (Disabled for simplified auth) -->
+    <template id="reset-password-template" style="display: none;">
         <div class="auth-form-container">
             <div class="auth-logo">
                 <img src="/6233209994745069536_120.jpg" alt="CalcuBite Logo" width="60" height="60">

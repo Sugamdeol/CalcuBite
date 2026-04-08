@@ -328,18 +328,21 @@ function showResetPasswordForm(e) {
   document.getElementById('back-to-login-link').addEventListener('click', showLoginForm);
 }
 
+// Helper to convert username to internal email
+const usernameToEmail = (username) => `${username.trim().toLowerCase()}@NutriScanAI.internal`;
+
 // Handle login form submission
 async function handleLogin(e) {
   e.preventDefault();
   
-  const email = document.getElementById('login-email').value;
+  const username = document.getElementById('login-username').value;
   const password = document.getElementById('login-password').value;
   const rememberMe = document.getElementById('remember-me').checked;
   const errorElement = document.getElementById('login-error');
   
   try {
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+      email: usernameToEmail(username),
       password,
       options: {
         persistSession: rememberMe
@@ -362,8 +365,7 @@ async function handleLogin(e) {
 async function handleRegister(e) {
   e.preventDefault();
   
-  const fullName = document.getElementById('register-name').value;
-  const email = document.getElementById('register-email').value;
+  const username = document.getElementById('register-username').value;
   const password = document.getElementById('register-password').value;
   const termsAgreed = document.getElementById('terms-agree').checked;
   const errorElement = document.getElementById('register-error');
@@ -374,13 +376,15 @@ async function handleRegister(e) {
     return;
   }
   
+  const email = usernameToEmail(username);
+
   try {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
-          full_name: fullName
+          full_name: username
         }
       }
     });
@@ -393,7 +397,6 @@ async function handleRegister(e) {
         await fetchUserProfile();
         updateUIForUser();
     } else {
-        // If email confirmation is disabled in Supabase, we might get here.
         // Try logging in immediately
         try {
             const loginRes = await supabase.auth.signInWithPassword({ email, password });
@@ -817,7 +820,7 @@ function populateProfileModal() {
     avatarImg.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(nameInput.value)}&background=random`;
   }
 
-  if (userProfile?.nutritional_goals && personalizationStatus) {
+  if (userProfile?.gender && userProfile?.age && personalizationStatus) {
     personalizationStatus.style.display = 'flex';
   }
   
