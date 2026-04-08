@@ -216,7 +216,7 @@ fileInput.addEventListener('change', async e => {
 
 // Add Supabase scan history tracking
 async function logScan(scanType, scanData) {
-  if (!window.auth.currentUser()) return;
+  if (!window.auth || !window.auth.currentUser()) return;
   
   const sb = window.supabase_client;
   try {
@@ -660,7 +660,7 @@ Your response MUST be valid JSON with this structure:
 }
 
 async function logCurrentMeal() {
-    if (!analysisData || !window.auth.currentUser()) {
+    if (!analysisData || !window.auth || !window.auth.currentUser()) {
         alert("Please scan a meal first.");
         return;
     }
@@ -1794,7 +1794,7 @@ function showDashboard() {
 
 // Fetch dashboard data
 async function fetchDashboardData() {
-  if (!window.auth.currentUser()) return;
+  if (!window.auth || !window.auth.currentUser()) return;
   
   const sb = window.supabase_client;
   try {
@@ -1880,7 +1880,14 @@ function updateDashboardUI() {
     sugar: acc.sugar + (log.sugar || 0)
   }), { calories: 0, protein: 0, carbs: 0, sugar: 0 });
 
-  const goals = window.auth.getNutritionalGoals();
+  const goals = window.auth ? window.auth.getNutritionalGoals() : {
+    calories: 2000,
+    protein: 50,
+    carbs: 275,
+    fat: 78,
+    sugar: 50,
+    sodium: 2300
+  };
 
   document.getElementById('today-date-display').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   document.getElementById('today-calories').textContent = `${Math.round(totals.calories)} / ${goals.calories}`;
@@ -2379,7 +2386,7 @@ async function loadAds() {
 
 // Log ad impression
 async function logAdImpression(adId) {
-  if (!window.auth.currentUser()) return;
+  if (!window.auth || !window.auth.currentUser()) return;
   
   const sb = window.supabase_client;
   try {
@@ -2403,7 +2410,7 @@ async function logAdImpression(adId) {
 
 // Log ad click
 async function logAdClick(adId) {
-  if (!window.auth.currentUser()) return;
+  if (!window.auth || !window.auth.currentUser()) return;
   
   const sb = window.supabase_client;
   try {
@@ -2635,7 +2642,7 @@ function createScanHistoryChart() {
 // Initialize event listeners
 document.addEventListener('DOMContentLoaded', () => {
   // Show landing page for unauthenticated users
-  const isAuthenticated = window.auth && window.auth.currentUser();
+  const isAuthenticated = window.auth && window.auth.currentUser && window.auth.currentUser();
   const landingPage = document.getElementById('landing-page');
   const appContainer = document.getElementById('app-container');
   const authContainer = document.getElementById('auth-container');
@@ -2744,7 +2751,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   
   // Reset daily scan count if needed
-  if (window.auth.currentUser()) {
+  if (window.auth && window.auth.currentUser && window.auth.currentUser()) {
     window.auth.resetDailyScanCount();
   }
   

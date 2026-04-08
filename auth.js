@@ -25,6 +25,22 @@ let currentUser = null;
 let userProfile = null;
 let lastAdWatched = null;
 
+// Initialize window.auth early with basic getters
+window.auth = {
+  currentUser: () => currentUser,
+  userProfile: () => userProfile,
+  lastAdWatched: () => lastAdWatched,
+  isPremium: () => false,
+  getNutritionalGoals: () => userProfile?.nutritional_goals || {
+    calories: 2000,
+    protein: 50,
+    carbs: 275,
+    fat: 78,
+    sugar: 50,
+    sodium: 2300
+  }
+};
+
 async function calculateNutritionalGoals(profile) {
     const prompt = `Based on the following user profile, calculate daily nutritional limits:
 Gender: ${profile.gender}
@@ -312,7 +328,7 @@ function showResetPasswordForm(e) {
 }
 
 // Helper to convert username to internal email
-const usernameToEmail = (username) => `${username.trim().toLowerCase()}@NutriScanAI.internal`;
+const usernameToEmail = (username) => `${username.trim().toLowerCase()}@nutriscanai-internal.com`;
 
 // Handle login form submission
 async function handleLogin(e) {
