@@ -598,15 +598,15 @@ Your response MUST be valid JSON with this structure:
         ]
       }
     ],
-    model: "openai-large",
-    jsonMode: true,
-    private: true
+    model: "claude-fast",
+    response_format: { type: "json_object" }
   };
   
-  const response = await fetch('https://text.pollinations.ai/', {
+  const response = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer sk_ZDnV9hilntSLCLGEmJKPxavBNJaPLI4K'
     },
     body: JSON.stringify(requestBody)
   });
@@ -615,7 +615,8 @@ Your response MUST be valid JSON with this structure:
     throw new Error(`API responded with status: ${response.status}`);
   }
   
-  const data = await response.json();
+  const responseData = await response.json();
+  const data = responseData.choices[0].message;
   
   try {
     if (data && data.content) {
@@ -626,9 +627,6 @@ Your response MUST be valid JSON with this structure:
         // If content is already an object
         analysisData = data.content;
       }
-    } else if (data && typeof data === 'object') {
-      // If the data itself is the result object
-      analysisData = data;
     } else {
       throw new Error('Invalid response format from API');
     }
@@ -638,7 +636,7 @@ Your response MUST be valid JSON with this structure:
   }
   
   // Store actual analysis data rating from API response
-  const actualRating = data.rating;
+  const actualRating = analysisData?.rating || 5;
 
   // Display the results
   displayResults(analysisData);
@@ -652,7 +650,61 @@ Your response MUST be valid JSON with this structure:
       items: analysisData?.foodIdentification?.mainItems || []
     });
   }
-  
+
+  // Set up Log Meal button
+  const logBtn = document.getElementById('log-meal-button');
+  if (logBtn) {
+    logBtn.onclick = () => logCurrentMeal();
+  }
+}
+
+async function logCurrentMeal() {
+    if (!analysisData || !window.auth.currentUser()) {
+        alert("Please scan a meal first.");
+        return;
+    }
+
+    try {
+        const nutrition = analysisData.nutritionEstimate || {};
+        const foodName = analysisData.foodIdentification?.mainItems?.join(', ') || "Scanned Meal";
+
+        // Extract numeric values from strings like "250 kcal" or "10g"
+        const parseNum = (str) => {
+            if (!str) return 0;
+            const matches = String(str).match(/[\d.]+/);
+            return matches ? parseFloat(matches[0]) : 0;
+        };
+
+        const logData = {
+            user_id: window.auth.currentUser().id,
+            food_name: foodName,
+            calories: parseNum(nutrition.calories),
+            protein: parseNum(nutrition.protein),
+            carbs: parseNum(nutrition.carbs),
+            fat: parseNum(nutrition.fat),
+            sugar: parseNum(nutrition.sugar),
+            sodium: parseNum(nutrition.sodium)
+        };
+
+        const { error } = await supabase
+            .from('daily_logs')
+            .insert([logData]);
+
+        if (error) throw error;
+
+        const successAlert = document.getElementById('log-success-alert');
+        if (successAlert) {
+            successAlert.style.display = 'block';
+            setTimeout(() => successAlert.style.display = 'none', 3000);
+        }
+
+        // Update dashboard if it's open or refresh data
+        if (typeof fetchDashboardData === 'function') fetchDashboardData();
+
+    } catch (err) {
+        console.error("Error logging meal:", err);
+        alert("Failed to log meal: " + err.message);
+    }
 }
 
 // Display results function - updated to handle gym mode
@@ -1491,17 +1543,17 @@ If the user asks about something not related to nutrition or health, politely re
     messages.push(...conversationHistory);
     
     // Make request to Pollination API
-    const response = await fetch('https://text.pollinations.ai/v1/chat/completions', {
+    const response = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer sk_ZDnV9hilntSLCLGEmJKPxavBNJaPLI4K'
       },
       body: JSON.stringify({
-        model: "openai-large",
+        model: "claude-fast",
         messages: messages,
         temperature: 0.7,
-        max_tokens: 800,
-        private: true
+        max_tokens: 800
       })
     });
     
@@ -1575,18 +1627,50 @@ function showDashboard() {
       dashboardModal.className = 'modal';
       
       dashboardModal.innerHTML = `
-        <div class="modal-content">
+        <div class="modal-content" style="max-width: 1000px;">
           <div class="modal-header">
             <h2><i class="fas fa-tachometer-alt"></i> Your Dashboard</h2>
             <span class="close-modal">&times;</span>
           </div>
           <div class="modal-body">
             <div class="dashboard-content">
+              <!-- New Daily Intake Tracker -->
+              <div class="dashboard-section intake-tracker" style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: white; padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                  <h3><i class="fas fa-calendar-day"></i> Today's Progress</h3>
+                  <div id="today-date-display" style="font-size: 0.9rem; opacity: 0.9;"></div>
+                </div>
+                <div class="intake-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem;">
+                  <div class="intake-stat">
+                    <small>Calories</small>
+                    <div id="today-calories" style="font-size: 1.5rem; font-weight: bold;">0 / 2000</div>
+                    <div class="mini-progress-bar" style="height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; margin-top: 5px;">
+                        <div id="cal-progress" style="height: 100%; width: 0%; background: #10b981; border-radius: 3px;"></div>
+                    </div>
+                  </div>
+                  <div class="intake-stat">
+                    <small>Sugar</small>
+                    <div id="today-sugar" style="font-size: 1.5rem; font-weight: bold;">0 / 50g</div>
+                    <div class="mini-progress-bar" style="height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; margin-top: 5px;">
+                        <div id="sugar-progress" style="height: 100%; width: 0%; background: #f59e0b; border-radius: 3px;"></div>
+                    </div>
+                  </div>
+                  <div class="intake-stat">
+                    <small>Protein</small>
+                    <div id="today-protein" style="font-size: 1.5rem; font-weight: bold;">0 / 50g</div>
+                  </div>
+                  <div class="intake-stat">
+                    <small>Carbs</small>
+                    <div id="today-carbs" style="font-size: 1.5rem; font-weight: bold;">0 / 275g</div>
+                  </div>
+                </div>
+              </div>
+
               <div class="dashboard-overview">
                 <div class="dashboard-chart">
-                  <h3><i class="fas fa-chart-line"></i> Scan History</h3>
+                  <h3><i class="fas fa-chart-line"></i> Consumption History (30 Days)</h3>
                   <div class="chart-container" style="height: 250px;">
-                    <canvas id="scan-history-chart"></canvas>
+                    <canvas id="consumption-history-chart"></canvas>
                   </div>
                 </div>
                 <div class="dashboard-stats">
@@ -1632,6 +1716,17 @@ function showDashboard() {
                 </div>
               </div>
               
+              <div class="dashboard-section">
+                <h3><i class="fas fa-utensils"></i> Recent Logged Meals (30 Days)</h3>
+                <div class="recent-logs">
+                    <div id="recent-logs-list" class="scans-list">
+                        <div class="empty-state">
+                            <p>No meals logged in the last 30 days.</p>
+                        </div>
+                    </div>
+                </div>
+              </div>
+
               <div class="dashboard-section">
                 <h3><i class="fas fa-history"></i> Recent Scans</h3>
                 <div class="recent-scans">
@@ -1683,7 +1778,7 @@ function showDashboard() {
       updateDashboardUI();
       
       // Create chart
-      createScanHistoryChart();
+      createConsumptionChart();
     }).catch(error => {
       console.error('Error showing dashboard:', error);
       alert('Error loading dashboard data. Please try again.');
@@ -1700,6 +1795,19 @@ async function fetchDashboardData() {
   if (!window.auth.currentUser()) return;
   
   try {
+    // Fetch daily logs for the last 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const { data: logsData, error: logsError } = await supabase
+        .from('daily_logs')
+        .select('*')
+        .eq('user_id', window.auth.currentUser().id)
+        .gte('logged_at', thirtyDaysAgo.toISOString())
+        .order('logged_at', { ascending: false });
+
+    if (logsError) throw logsError;
+
     // Fetch scan history
     const { data: scanData, error: scanError } = await supabase
       .from('scan_history')
@@ -1730,6 +1838,7 @@ async function fetchDashboardData() {
     
     // Store data for UI update
     userDashboardData = {
+      logs: logsData || [],
       scans: scanData || [],
       goals: goalData || [],
       profile: profileData || { scans_remaining: 0 }
@@ -1757,6 +1866,52 @@ async function fetchDashboardData() {
 function updateDashboardUI() {
   if (!userDashboardData) return;
   
+  // Update Intake Tracker
+  const today = new Date().toISOString().split('T')[0];
+  const todayLogs = userDashboardData.logs.filter(log => log.logged_at.startsWith(today));
+
+  const totals = todayLogs.reduce((acc, log) => ({
+    calories: acc.calories + (log.calories || 0),
+    protein: acc.protein + (log.protein || 0),
+    carbs: acc.carbs + (log.carbs || 0),
+    sugar: acc.sugar + (log.sugar || 0)
+  }), { calories: 0, protein: 0, carbs: 0, sugar: 0 });
+
+  const goals = window.auth.getNutritionalGoals();
+
+  document.getElementById('today-date-display').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  document.getElementById('today-calories').textContent = `${Math.round(totals.calories)} / ${goals.calories}`;
+  document.getElementById('today-sugar').textContent = `${Math.round(totals.sugar)} / ${goals.sugar}g`;
+  document.getElementById('today-protein').textContent = `${Math.round(totals.protein)} / ${goals.protein}g`;
+  document.getElementById('today-carbs').textContent = `${Math.round(totals.carbs)} / ${goals.carbs}g`;
+
+  const calPct = Math.min(100, (totals.calories / goals.calories) * 100);
+  const sugarPct = Math.min(100, (totals.sugar / goals.sugar) * 100);
+
+  document.getElementById('cal-progress').style.width = `${calPct}%`;
+  document.getElementById('sugar-progress').style.width = `${sugarPct}%`;
+  document.getElementById('sugar-progress').style.backgroundColor = sugarPct > 90 ? '#ef4444' : '#f59e0b';
+
+  // Update Recent Logs
+  const recentLogsList = document.getElementById('recent-logs-list');
+  if (recentLogsList && userDashboardData.logs.length > 0) {
+      recentLogsList.innerHTML = '';
+      userDashboardData.logs.slice(0, 10).forEach(log => {
+          const logDate = new Date(log.logged_at).toLocaleDateString();
+          const logItem = document.createElement('div');
+          logItem.className = 'scan-item';
+          logItem.innerHTML = `
+            <div class="scan-icon"><i class="fas fa-utensils"></i></div>
+            <div class="scan-details">
+                <h4>${log.food_name}</h4>
+                <p class="scan-date">${logDate}</p>
+                <p class="scan-item-name">${Math.round(log.calories)} kcal | P: ${Math.round(log.protein)}g | C: ${Math.round(log.carbs)}g</p>
+            </div>
+          `;
+          recentLogsList.appendChild(logItem);
+      });
+  }
+
   // Update stats
   const totalScansEl = document.getElementById('dashboard-total-scans');
   const scansRemainingEl = document.getElementById('dashboard-scans-remaining');
@@ -2290,6 +2445,70 @@ function checkAdUnlock() {
   }
 }
 
+// Create consumption history chart
+function createConsumptionChart() {
+  const chartCanvas = document.getElementById('consumption-history-chart');
+  if (!chartCanvas) return;
+
+  if (window.consumptionChart) {
+    window.consumptionChart.destroy();
+    window.consumptionChart = null;
+  }
+
+  // Group calorie intake by date for the last 30 days
+  const dataByDate = {};
+  const now = new Date();
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(now.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+    dataByDate[dateStr] = 0;
+  }
+
+  if (userDashboardData?.logs) {
+    userDashboardData.logs.forEach(log => {
+      const dateStr = log.logged_at.split('T')[0];
+      if (dataByDate[dateStr] !== undefined) {
+        dataByDate[dateStr] += log.calories || 0;
+      }
+    });
+  }
+
+  const labels = Object.keys(dataByDate).map(date => {
+    const d = new Date(date);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  });
+  const data = Object.values(dataByDate);
+
+  try {
+    window.consumptionChart = new Chart(chartCanvas, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Daily Calories',
+          data: data,
+          backgroundColor: 'rgba(79, 70, 229, 0.7)',
+          borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          title: { display: true, text: 'Daily Calorie Intake (30 Days)' }
+        },
+        scales: {
+          y: { beginAtZero: true }
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Error creating consumption chart:', err);
+  }
+}
+
 // Create scan history chart
 function createScanHistoryChart() {
   const chartCanvas = document.getElementById('scan-history-chart');
@@ -2525,41 +2744,39 @@ document.addEventListener('DOMContentLoaded', () => {
   loadAds();
   
   // Additional landing page animations
-  document.addEventListener('DOMContentLoaded', function() {
-    // Add scroll animations to landing page elements
-    if (document.querySelector('.landing-page')) {
-      const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('animate-in');
-          }
-        });
-      }, {
-        threshold: 0.1
+  // Add scroll animations to landing page elements
+  if (document.querySelector('.landing-page')) {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('animate-in');
+        }
       });
-      
-      document.querySelectorAll('.feature-card, .step-card, .testimonial-card, .section-header').forEach(el => {
-        el.classList.add('animate-item');
-        observer.observe(el);
-      });
-    }
+    }, {
+      threshold: 0.1
+    });
     
-    // Make device mockup interactive
-    const deviceMockup = document.querySelector('.device-mockup');
-    if (deviceMockup) {
-      deviceMockup.addEventListener('mousemove', (e) => {
-        const rect = deviceMockup.getBoundingClientRect();
-        const x = (e.clientX - rect.left) / rect.width - 0.5;
-        const y = (e.clientY - rect.top) / rect.height - 0.5;
-        
-        deviceMockup.style.transform = `rotate(${-5 + x * 5}deg) translateY(${-20 + y * 10}px)`;
-      });
+    document.querySelectorAll('.feature-card, .step-card, .testimonial-card, .section-header').forEach(el => {
+      el.classList.add('animate-item');
+      observer.observe(el);
+    });
+  }
+
+  // Make device mockup interactive
+  const deviceMockup = document.querySelector('.device-mockup');
+  if (deviceMockup) {
+    deviceMockup.addEventListener('mousemove', (e) => {
+      const rect = deviceMockup.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width - 0.5;
+      const y = (e.clientY - rect.top) / rect.height - 0.5;
       
-      deviceMockup.addEventListener('mouseleave', () => {
-        deviceMockup.style.transform = 'rotate(-5deg) translateY(-20px)';
-      });
-    }
-  });
+      deviceMockup.style.transform = `rotate(${-5 + x * 5}deg) translateY(${-20 + y * 10}px)`;
+    });
+
+    deviceMockup.addEventListener('mouseleave', () => {
+      deviceMockup.style.transform = 'rotate(-5deg) translateY(-20px)';
+    });
+  }
   
   // Dashboard link
   const dashboardLink = document.getElementById('dashboard-link');

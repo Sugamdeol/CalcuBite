@@ -25,10 +25,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script>
-        // Make supabaseClient available globally
-        const supabaseClient = supabase;
-    </script>
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -521,8 +517,16 @@
                             
                             <!-- Overview Tab -->
                             <div class="tab-content active" id="overview-tab">
+                                <div id="log-success-alert" class="alert success" style="display: none; margin-bottom: 1rem;">
+                                    <i class="fas fa-check-circle"></i> Meal logged successfully!
+                                </div>
                                 <div class="results-section" id="healthScore">
                                     <!-- Health score will be inserted here -->
+                                </div>
+                                <div class="log-action-container" style="margin-bottom: 1.5rem;">
+                                    <button id="log-meal-button" class="primary-button pulse-animation" style="width: 100%; justify-content: center;">
+                                        <i class="fas fa-plus-circle"></i> Log This Meal
+                                    </button>
                                 </div>
                                 
                                 <div class="results-section">
@@ -810,17 +814,51 @@
                             <label for="profile-name">Full Name</label>
                             <input type="text" id="profile-name" placeholder="Your name">
                         </div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="profile-gender">Gender</label>
+                                <select id="profile-gender">
+                                    <option value="">Select Gender</option>
+                                    <option value="male">Male</option>
+                                    <option value="female">Female</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-age">Age</label>
+                                <input type="number" id="profile-age" placeholder="Years">
+                            </div>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="profile-weight">Weight (kg)</label>
+                                <input type="number" id="profile-weight" step="0.1" placeholder="kg">
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-height">Height (cm)</label>
+                                <input type="number" id="profile-height" placeholder="cm">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="profile-activity">Activity Level</label>
+                            <select id="profile-activity">
+                                <option value="sedentary">Sedentary (little to no exercise)</option>
+                                <option value="light">Lightly active (light exercise 1-3 days/week)</option>
+                                <option value="moderate">Moderately active (moderate exercise 3-5 days/week)</option>
+                                <option value="very">Very active (hard exercise 6-7 days/week)</option>
+                                <option value="extra">Extra active (very hard exercise & physical job)</option>
+                            </select>
+                        </div>
                         <div class="form-group">
                             <label for="profile-email">Email</label>
                             <input type="email" id="profile-email" placeholder="Your email" disabled>
                         </div>
                         <div class="form-group">
-                            <label for="profile-plan">Current Plan</label>
-                            <input type="text" id="profile-plan" disabled>
-                        </div>
-                        <div class="form-group">
                             <label for="profile-password">Change Password</label>
                             <input type="password" id="profile-password" placeholder="New password">
+                        </div>
+                        <div id="personalization-status" class="personalization-status">
+                            <i class="fas fa-magic"></i> AI Personalization active: Daily limits calculated
                         </div>
                         <button type="submit" class="primary-button">Update Profile</button>
                     </form>
@@ -996,41 +1034,5 @@
     <script src="auth.js"></script>
     <script src="admin.js"></script>
     <script src="script.js"></script>
-    <script>
-      // Create health goals table if needed
-      async function createHealthGoalsTable() {
-        if (window.auth && window.auth.currentUser()) {
-          // Check if health_goals table exists
-          try {
-            await supabase.rpc('create_health_goals_table_if_needed');
-          } catch (rpcError) {
-            console.log("Creating health goals table with raw SQL");
-            try {
-              await supabase.from('health_goals').select('count');
-            } catch (error) {
-              // Table likely doesn't exist, create it
-              const { error: sqlError } = await supabase.sql(`
-                CREATE TABLE IF NOT EXISTS health_goals (
-                  id SERIAL PRIMARY KEY,
-                  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-                  goal_type VARCHAR(100) NOT NULL,
-                  target TEXT NOT NULL,
-                  timeline VARCHAR(100),
-                  notes TEXT,
-                  progress INT DEFAULT 0,
-                  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-                  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-                );
-                CREATE INDEX IF NOT EXISTS idx_health_goals_user_id ON health_goals(user_id);
-              `);
-              
-              if (sqlError) console.error("Failed to create health goals table:", sqlError);
-            }
-          }
-        }
-      }
-      // Call this function when app loads
-      document.addEventListener('DOMContentLoaded', createHealthGoalsTable);
-    </script>
 </body>
 </html>

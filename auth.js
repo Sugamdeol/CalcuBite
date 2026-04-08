@@ -1,7 +1,8 @@
 // Supabase initialization
-const supabaseUrl = 'https://wefdmpmdyquuspucxpnn.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndlZmRtcG1keXF1dXNwdWN4cG5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA5MTU2MDMsImV4cCI6MjA1NjQ5MTYwM30.Lhn5TRevwGosKH05m2D9UoNWtw0uVq-WDGDhliY8gzg';
-const supabase = supabaseClient.createClient(supabaseUrl, supabaseKey);
+const supabaseUrl = 'https://msooyauwfmzfrvsdzxhn.supabase.co';
+const supabaseKey = 'sb_publishable_Mmk7EBnekxE4treg8XKHZg_ld7NGC5M';
+// Use var to allow redeclaration if the library already defined it
+var supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 // DOM elements
 const authContainer = document.getElementById('auth-container');
@@ -20,6 +21,55 @@ const premiumNotification = document.getElementById('premium-notification');
 let currentUser = null;
 let userProfile = null;
 let lastAdWatched = null;
+
+// Export functions immediately to window.auth
+window.auth = {
+  checkAuth: () => checkAuth(),
+  updateScansRemaining: (scans) => updateScansRemaining(scans),
+  resetDailyScanCount: () => resetDailyScanCount(),
+  watchAd: () => watchAd(),
+  currentUser: () => currentUser,
+  userProfile: () => userProfile,
+  isPremium: () => false,
+  lastAdWatched: () => lastAdWatched,
+  getNutritionalGoals: () => userProfile?.nutritional_goals || {
+    calories: 2000,
+    protein: 50,
+    carbs: 275,
+    fat: 78,
+    sugar: 50,
+    sodium: 2300
+  }
+};
+
+async function calculateNutritionalGoals(profile) {
+    const prompt = `Based on the following user profile, calculate daily nutritional limits:
+Gender: ${profile.gender}
+Age: ${profile.age}
+Weight: ${profile.weight_kg}kg
+Height: ${profile.height_cm}cm
+Activity Level: ${profile.activity_level}
+
+Provide a JSON object with these keys: calories, protein (g), carbs (g), fat (g), sugar (g), sodium (mg).
+Respond ONLY with the JSON object.`;
+
+    const response = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer sk_ZDnV9hilntSLCLGEmJKPxavBNJaPLI4K'
+        },
+        body: JSON.stringify({
+            model: "claude-fast",
+            messages: [{ role: "user", content: prompt }],
+            response_format: { type: "json_object" }
+        })
+    });
+
+    if (!response.ok) throw new Error("AI calculation failed");
+    const data = await response.json();
+    return JSON.parse(data.choices[0].message.content);
+}
 
 // Authentication state
 async function checkAuth() {
@@ -80,7 +130,15 @@ async function createUserProfile() {
         email: currentUser.email,
         is_admin: false,
         scans_remaining: 5,
-        last_scan_reset: new Date().toISOString()
+        last_scan_reset: new Date().toISOString(),
+        nutritional_goals: {
+            calories: 2000,
+            protein: 50,
+            carbs: 275,
+            fat: 78,
+            sugar: 50,
+            sodium: 2300
+        }
       }])
       .select()
       .single();
@@ -327,23 +385,39 @@ async function handleRegister(e) {
       options: {
         data: {
           full_name: fullName
-        },
-        emailRedirectTo: window.location.origin
+        }
       }
     });
     
     if (error) throw error;
     
-    // Show success message
-    errorElement.style.display = 'block';
-    errorElement.textContent = 'Registration successful! Please check your email to confirm your account.';
-    errorElement.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
-    errorElement.style.color = 'var(--success)';
-    
-    // Redirect to login after a delay
-    setTimeout(() => {
-      showLoginForm();
-    }, 3000);
+    // Auto-login or redirect to login after signup
+    if (data.session) {
+        currentUser = data.user;
+        await fetchUserProfile();
+        updateUIForUser();
+    } else {
+        // If email confirmation is disabled in Supabase, we might get here.
+        // Try logging in immediately
+        try {
+            const loginRes = await supabase.auth.signInWithPassword({ email, password });
+            if (!loginRes.error) {
+                currentUser = loginRes.data.user;
+                await fetchUserProfile();
+                updateUIForUser();
+                return;
+            }
+        } catch(err) {}
+
+        errorElement.style.display = 'block';
+        errorElement.textContent = 'Registration successful! You can now login.';
+        errorElement.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
+        errorElement.style.color = 'var(--success)';
+
+        setTimeout(() => {
+          showLoginForm();
+        }, 2000);
+    }
     
   } catch (error) {
     errorElement.style.display = 'block';
@@ -735,13 +809,14 @@ function showProfileModal() {
 // Helper function to populate profile modal with data
 function populateProfileModal() {
   const nameInput = document.getElementById('profile-name');
+  const genderInput = document.getElementById('profile-gender');
+  const ageInput = document.getElementById('profile-age');
+  const weightInput = document.getElementById('profile-weight');
+  const heightInput = document.getElementById('profile-height');
+  const activityInput = document.getElementById('profile-activity');
   const emailInput = document.getElementById('profile-email');
-  const planInput = document.getElementById('profile-plan');
   const avatarImg = document.getElementById('profile-avatar-img');
-  const freePlan = document.getElementById('free-plan');
-  const proPlan = document.getElementById('pro-plan');
-  const currentPlanBtn = document.getElementById('current-plan-btn');
-  const upgradePlanBtn = document.getElementById('upgrade-plan-btn');
+  const personalizationStatus = document.getElementById('personalization-status');
   
   // Check if essential elements exist before proceeding
   if (!nameInput || !emailInput) {
@@ -751,13 +826,21 @@ function populateProfileModal() {
   
   // Fill profile data
   nameInput.value = userProfile?.full_name || '';
+  if (genderInput) genderInput.value = userProfile?.gender || '';
+  if (ageInput) ageInput.value = userProfile?.age || '';
+  if (weightInput) weightInput.value = userProfile?.weight_kg || '';
+  if (heightInput) heightInput.value = userProfile?.height_cm || '';
+  if (activityInput) activityInput.value = userProfile?.activity_level || 'sedentary';
   emailInput.value = currentUser?.email || '';
-  if (planInput) planInput.value = 'Free';
   
   if (userProfile?.avatar_url) {
     avatarImg.src = userProfile.avatar_url;
   } else {
     avatarImg.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(nameInput.value)}&background=random`;
+  }
+
+  if (userProfile?.nutritional_goals && personalizationStatus) {
+    personalizationStatus.style.display = 'flex';
   }
   
   // Show/hide plan buttons based on current plan - with null checks
@@ -782,24 +865,43 @@ function populateProfileModal() {
     profileForm.onsubmit = async (e) => {
       e.preventDefault();
       
-      const newName = nameInput.value.trim();
+      const updateData = {
+        full_name: nameInput.value.trim(),
+        gender: genderInput.value,
+        age: parseInt(ageInput.value),
+        weight_kg: parseFloat(weightInput.value),
+        height_cm: parseFloat(heightInput.value),
+        activity_level: activityInput.value
+      };
+      
       const newPassword = document.getElementById('profile-password')?.value.trim() || '';
       
-      let updateData = {};
-      
-      if (newName && newName !== userProfile?.full_name) {
-        updateData.full_name = newName;
-      }
-      
-      // Update profile in supabase
-      if (Object.keys(updateData).length > 0) {
-        const success = await updateProfile(updateData);
-        
-        if (success) {
-          alert('Profile updated successfully!');
-        } else {
-          alert('Failed to update profile. Please try again.');
+      // AI Personalization check: if profile details changed, recalculate limits
+      const profileChanged =
+        updateData.gender !== userProfile?.gender ||
+        updateData.age !== userProfile?.age ||
+        updateData.weight_kg !== userProfile?.weight_kg ||
+        updateData.height_cm !== userProfile?.height_cm ||
+        updateData.activity_level !== userProfile?.activity_level;
+
+      if (profileChanged) {
+        try {
+            const goals = await calculateNutritionalGoals(updateData);
+            updateData.nutritional_goals = goals;
+        } catch (err) {
+            console.error("AI Goal calculation failed:", err);
+            // Fallback default goals if AI fails
         }
+      }
+
+      // Update profile in supabase
+      const success = await updateProfile(updateData);
+
+      if (success) {
+        alert('Profile updated successfully! AI has set your daily nutritional limits.');
+        if (personalizationStatus) personalizationStatus.style.display = 'flex';
+      } else {
+        alert('Failed to update profile. Please try again.');
       }
       
       // Update password if provided
@@ -980,5 +1082,13 @@ window.auth = {
   currentUser: () => currentUser,
   userProfile: () => userProfile,
   isPremium: () => false, 
-  lastAdWatched: () => lastAdWatched
+  lastAdWatched: () => lastAdWatched,
+  getNutritionalGoals: () => userProfile?.nutritional_goals || {
+    calories: 2000,
+    protein: 50,
+    carbs: 275,
+    fat: 78,
+    sugar: 50,
+    sodium: 2300
+  }
 };
