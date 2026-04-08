@@ -549,12 +549,7 @@ Your response MUST be valid JSON with this structure:
     if (data && data.content) {
       // Try parsing as JSON if content is a string
       if (typeof data.content === 'string') {
-        let content = data.content.trim();
-        // Remove markdown code blocks if present
-        if (content.startsWith('```')) {
-          content = content.replace(/^```(?:json)?\s*|\s*```$/g, '');
-        }
-        analysisData = JSON.parse(content);
+        analysisData = extractJSON(data.content);
       } else if (typeof data.content === 'object') {
         // If content is already an object
         analysisData = data.content;
@@ -1654,6 +1649,54 @@ function showDashboard() {
                 </div>
               </div>
               
+              <div class="dashboard-section personal-info" style="margin-bottom: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                  <h3><i class="fas fa-user-edit"></i> Personal Profile</h3>
+                </div>
+                <div class="profile-form-compact" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; background: var(--bg-secondary); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color);">
+                  <div class="form-group-compact">
+                    <label style="font-size: 0.85rem; margin-bottom: 0.4rem; display: block;">Gender</label>
+                    <select id="dash-gender" style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary);">
+                      <option value="">Select</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div class="form-group-compact">
+                    <label style="font-size: 0.85rem; margin-bottom: 0.4rem; display: block;">Age</label>
+                    <input type="number" id="dash-age" style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary);" placeholder="Years">
+                  </div>
+                  <div class="form-group-compact">
+                    <label style="font-size: 0.85rem; margin-bottom: 0.4rem; display: block;">Weight (kg)</label>
+                    <input type="number" id="dash-weight" step="0.1" style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary);" placeholder="kg">
+                  </div>
+                  <div class="form-group-compact">
+                    <label style="font-size: 0.85rem; margin-bottom: 0.4rem; display: block;">Height (cm)</label>
+                    <input type="number" id="dash-height" style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary);" placeholder="cm">
+                  </div>
+                  <div class="form-group-compact" style="grid-column: span 1;">
+                    <label style="font-size: 0.85rem; margin-bottom: 0.4rem; display: block;">Activity Level</label>
+                    <select id="dash-activity" style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary);">
+                      <option value="sedentary">Sedentary</option>
+                      <option value="light">Lightly active</option>
+                      <option value="moderate">Moderately active</option>
+                      <option value="very">Very active</option>
+                      <option value="extra">Extra active</option>
+                    </select>
+                  </div>
+                  <div class="form-group-compact" style="grid-column: 1 / -1; display: flex; gap: 1rem; align-items: flex-end; margin-top: 0.5rem;">
+                    <button id="dash-update-profile" class="primary-button" style="padding: 0.7rem 1.5rem; flex: 1; justify-content: center;">
+                      <i class="fas fa-save"></i> Save Profile
+                    </button>
+                    <button id="dash-generate-targets" class="secondary-button" style="padding: 0.7rem 1.5rem; flex: 1; justify-content: center; background: #4f46e5; color: white;">
+                      <i class="fas fa-magic"></i> Generate AI Targets
+                    </button>
+                  </div>
+                  <div id="dash-profile-status" style="grid-column: 1 / -1; font-size: 0.8rem; margin-top: 0.5rem; display: none; align-items: center; gap: 0.5rem;"></div>
+                </div>
+              </div>
+
               <div class="dashboard-section health-goals">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <h3><i class="fas fa-bullseye"></i> Health Goals</h3>
@@ -1717,6 +1760,14 @@ function showDashboard() {
       startScanningBtn.addEventListener('click', () => {
         dashboardModal.style.display = 'none';
       });
+
+      // Dash Profile Update
+      const dashUpdateBtn = dashboardModal.querySelector('#dash-update-profile');
+      dashUpdateBtn.addEventListener('click', handleDashboardProfileUpdate);
+
+      // Dash AI Targets
+      const dashTargetBtn = dashboardModal.querySelector('#dash-generate-targets');
+      dashTargetBtn.addEventListener('click', handleDashboardTargetGeneration);
     }
     
     // Fetch user's dashboard data
@@ -1741,6 +1792,116 @@ function showDashboard() {
 }
 
 // Fetch dashboard data
+async function handleDashboardProfileUpdate() {
+    const updateData = {
+        gender: document.getElementById('dash-gender').value,
+        age: parseInt(document.getElementById('dash-age').value),
+        weight_kg: parseFloat(document.getElementById('dash-weight').value),
+        height_cm: parseFloat(document.getElementById('dash-height').value),
+        activity_level: document.getElementById('dash-activity').value
+    };
+
+    const statusEl = document.getElementById('dash-profile-status');
+    statusEl.style.display = 'flex';
+    statusEl.style.color = 'var(--primary)';
+    statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving profile...';
+
+    const success = await window.auth.updateProfile(updateData);
+    if (success) {
+        statusEl.style.color = 'var(--success)';
+        statusEl.innerHTML = '<i class="fas fa-check-circle"></i> Profile saved successfully!';
+        setTimeout(() => statusEl.style.display = 'none', 3000);
+    } else {
+        statusEl.style.color = 'var(--danger)';
+        statusEl.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error saving profile.';
+    }
+}
+
+async function handleDashboardTargetGeneration() {
+    const updateData = {
+        gender: document.getElementById('dash-gender').value,
+        age: parseInt(document.getElementById('dash-age').value),
+        weight_kg: parseFloat(document.getElementById('dash-weight').value),
+        height_cm: parseFloat(document.getElementById('dash-height').value),
+        activity_level: document.getElementById('dash-activity').value
+    };
+
+    if (!updateData.gender || !updateData.age || !updateData.weight_kg) {
+        alert("Please fill out your profile info first (Gender, Age, Weight) to generate accurate targets.");
+        return;
+    }
+
+    const statusEl = document.getElementById('dash-profile-status');
+    statusEl.style.display = 'flex';
+    statusEl.style.color = 'var(--primary)';
+    statusEl.innerHTML = '<i class="fas fa-magic fa-spin"></i> AI is calculating your nutritional targets...';
+
+    try {
+        const goals = await calculateNutritionalGoals(updateData);
+        updateData.nutritional_goals = goals;
+
+        const success = await window.auth.updateProfile(updateData);
+        if (success) {
+            statusEl.style.color = 'var(--success)';
+            statusEl.innerHTML = '<i class="fas fa-check-circle"></i> AI Targets generated and saved!';
+
+            // Refresh dashboard view
+            await fetchDashboardData();
+            updateDashboardUI();
+
+            setTimeout(() => statusEl.style.display = 'none', 5000);
+        } else {
+            throw new Error("Failed to save goals");
+        }
+    } catch (err) {
+        console.error("AI Target Error:", err);
+        statusEl.style.color = 'var(--danger)';
+        statusEl.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error generating targets. Please try again.';
+    }
+}
+
+async function calculateNutritionalGoals(profile) {
+    const prompt = `Based on the following user profile, calculate daily nutritional limits:
+Gender: ${profile.gender}
+Age: ${profile.age}
+Weight: ${profile.weight_kg}kg
+Height: ${profile.height_cm}cm
+Activity Level: ${profile.activity_level}
+
+Provide a JSON object with these keys: calories, protein (g), carbs (g), fat (g), sugar (g), sodium (mg).
+Respond ONLY with the JSON object.`;
+
+    const response = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer sk_ZDnV9hilntSLCLGEmJKPxavBNJaPLI4K'
+        },
+        body: JSON.stringify({
+            model: "claude-fast",
+            messages: [{ role: "user", content: prompt }],
+            response_format: { type: "json_object" }
+        })
+    });
+
+    if (!response.ok) throw new Error("AI calculation failed");
+    const data = await response.json();
+    const content = data.choices[0].message.content;
+
+    // Improved JSON extraction
+    try {
+      const firstBracket = content.indexOf('{');
+      const lastBracket = content.lastIndexOf('}');
+      if (firstBracket !== -1 && lastBracket !== -1) {
+        return JSON.parse(content.substring(firstBracket, lastBracket + 1));
+      }
+      return JSON.parse(content);
+    } catch (e) {
+      console.error("AI Goal Parsing Failed. Raw content:", content);
+      throw new Error("AI output was not valid JSON");
+    }
+}
+
 async function fetchDashboardData() {
   if (!window.auth || !window.auth.currentUser()) return;
   
@@ -1781,7 +1942,7 @@ async function fetchDashboardData() {
     // Fetch profile for scans remaining
     const { data: profileData, error: profileError } = await sb
       .from('profiles')
-      .select('scans_remaining')
+      .select('*')
       .eq('id', window.auth.currentUser().id)
       .single();
     
@@ -1792,7 +1953,8 @@ async function fetchDashboardData() {
       logs: logsData || [],
       scans: scanData || [],
       goals: goalData || [],
-      profile: profileData || { scans_remaining: 0 }
+      profile: profileData || { scans_remaining: 0 },
+      profile_data: profileData
     };
     
     // Update global variable for user health goals
@@ -1849,6 +2011,16 @@ function updateDashboardUI() {
   document.getElementById('cal-progress').style.width = `${calPct}%`;
   document.getElementById('sugar-progress').style.width = `${sugarPct}%`;
   document.getElementById('sugar-progress').style.backgroundColor = sugarPct > 90 ? '#ef4444' : '#f59e0b';
+
+  // Update Profile Form Fields
+  const profile = userDashboardData.profile_data || window.auth.userProfile();
+  if (profile) {
+    if (document.getElementById('dash-gender')) document.getElementById('dash-gender').value = profile.gender || '';
+    if (document.getElementById('dash-age')) document.getElementById('dash-age').value = profile.age || '';
+    if (document.getElementById('dash-weight')) document.getElementById('dash-weight').value = profile.weight_kg || '';
+    if (document.getElementById('dash-height')) document.getElementById('dash-height').value = profile.height_cm || '';
+    if (document.getElementById('dash-activity')) document.getElementById('dash-activity').value = profile.activity_level || 'sedentary';
+  }
 
   // Update Recent Logs
   const recentLogsList = document.getElementById('recent-logs-list');
@@ -2567,6 +2739,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
+// Helper to extract JSON from AI response
+function extractJSON(text) {
+  try {
+    // Find the first '{' and last '}'
+    const firstBracket = text.indexOf('{');
+    const lastBracket = text.lastIndexOf('}');
+    if (firstBracket !== -1 && lastBracket !== -1) {
+      const jsonPart = text.substring(firstBracket, lastBracket + 1);
+      return JSON.parse(jsonPart);
+    }
+    return JSON.parse(text);
+  } catch (e) {
+    console.error("Original text that failed parsing:", text);
+    throw new Error("Could not parse JSON from AI response. Please try again.");
+  }
+}
 
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {

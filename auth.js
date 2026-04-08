@@ -63,7 +63,20 @@ Respond ONLY with the JSON object.`;
 
     if (!response.ok) throw new Error("AI calculation failed");
     const data = await response.json();
-    return JSON.parse(data.choices[0].message.content);
+    const content = data.choices[0].message.content;
+
+    // Improved JSON extraction
+    try {
+      const firstBracket = content.indexOf('{');
+      const lastBracket = content.lastIndexOf('}');
+      if (firstBracket !== -1 && lastBracket !== -1) {
+        return JSON.parse(content.substring(firstBracket, lastBracket + 1));
+      }
+      return JSON.parse(content);
+    } catch (e) {
+      console.error("AI Goal Parsing Failed. Raw content:", content);
+      throw new Error("AI output was not valid JSON");
+    }
 }
 
 // Authentication state
@@ -526,25 +539,34 @@ function showProfileModal() {
     return;
   }
   
-  // Ensure the user profile data is loaded before proceeding
-  if (!userProfile) {
-    fetchUserProfile().then(() => {
-      if (userProfile) {
-        populateProfileModal();
-      } else {
-        console.error('Failed to load user profile');
+  try {
+    // Ensure the user profile data is loaded before proceeding
+    if (!userProfile) {
+      fetchUserProfile().then(() => {
+        if (userProfile) {
+          try {
+            populateProfileModal();
+            profileModal.style.display = 'block';
+          } catch (populateErr) {
+            console.error('Error populating profile modal:', populateErr);
+            alert('Error showing profile: ' + populateErr.message);
+          }
+        } else {
+          console.error('Failed to load user profile');
+          alert('Unable to load profile data. Please try again.');
+        }
+      }).catch(error => {
+        console.error('Error fetching profile data:', error);
         alert('Unable to load profile data. Please try again.');
-      }
-    }).catch(error => {
-      console.error('Error fetching profile data:', error);
-      alert('Unable to load profile data. Please try again.');
-    });
-  } else {
-    populateProfileModal();
+      });
+    } else {
+      populateProfileModal();
+      profileModal.style.display = 'block';
+    }
+  } catch (err) {
+    console.error('Error in showProfileModal:', err);
+    alert('Error opening profile: ' + err.message);
   }
-  
-  // Show modal
-  profileModal.style.display = 'block';
 }
 
 // Helper function to populate profile modal with data
@@ -595,8 +617,6 @@ function populateProfileModal() {
   const freeBadge = document.getElementById('free-plan-badge');
   if (proBadge) proBadge.style.display = 'inline-block';
   if (freeBadge) freeBadge.style.display = 'none';
-
-  // Form submission
   const profileForm = document.getElementById('profile-form');
   if (profileForm) {
     profileForm.onsubmit = async (e) => {
@@ -799,6 +819,8 @@ window.auth = {
   checkAuth,
   updateScansRemaining,
   resetDailyScanCount,
+  updateProfile,
+  calculateNutritionalGoals,
   currentUser: () => currentUser,
   userProfile: () => userProfile,
   isPremium: () => true,
