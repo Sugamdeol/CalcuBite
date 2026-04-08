@@ -2,10 +2,10 @@
 const supabaseUrl = 'https://msooyauwfmzfrvsdzxhn.supabase.co';
 const supabaseKey = 'sb_publishable_Mmk7EBnekxE4treg8XKHZg_ld7NGC5M';
 // Initialize Supabase client
-const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
-// Use a consistent variable name throughout the app
-window.supabase = supabaseClient;
-const supabase = supabaseClient;
+// Note: library exposes 'window.supabase' as the entry point.
+// We use 'supabase_client' as our internal instance.
+const supabase_client = window.supabase.createClient(supabaseUrl, supabaseKey);
+window.supabase_client = supabase_client;
 
 // DOM elements
 const authContainer = document.getElementById('auth-container');
@@ -56,7 +56,7 @@ Respond ONLY with the JSON object.`;
 
 // Authentication state
 async function checkAuth() {
-  const { data, error } = await supabase.auth.getSession();
+  const { data, error } = await supabase_client.auth.getSession();
   
   if (error) {
     console.error('Error checking authentication:', error);
@@ -79,7 +79,7 @@ async function checkAuth() {
 async function fetchUserProfile() {
   if (!currentUser) return;
   
-  const { data, error } = await supabase
+  const { data, error } = await supabase_client
     .from('profiles')
     .select('*')
     .eq('id', currentUser.id)
@@ -104,7 +104,7 @@ async function createUserProfile() {
   if (!currentUser) return null;
   
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabase_client
       .from('profiles')
       .insert([{
         id: currentUser.id,
@@ -324,7 +324,7 @@ async function handleLogin(e) {
   const errorElement = document.getElementById('login-error');
   
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase_client.auth.signInWithPassword({
       email: usernameToEmail(username),
       password,
       options: {
@@ -362,7 +362,7 @@ async function handleRegister(e) {
   const email = usernameToEmail(username);
 
   try {
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await supabase_client.auth.signUp({
       email,
       password,
       options: {
@@ -382,7 +382,7 @@ async function handleRegister(e) {
     } else {
         // Try logging in immediately
         try {
-            const loginRes = await supabase.auth.signInWithPassword({ email, password });
+            const loginRes = await supabase_client.auth.signInWithPassword({ email, password });
             if (!loginRes.error) {
                 currentUser = loginRes.data.user;
                 await fetchUserProfile();
@@ -416,7 +416,7 @@ async function handleResetPassword(e) {
   const successElement = document.getElementById('reset-success');
   
   try {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    const { error } = await supabase_client.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}`,
     });
     
@@ -439,7 +439,7 @@ async function handleResetPassword(e) {
 // Handle logout
 async function handleLogout() {
   try {
-    await supabase.auth.signOut();
+    await supabase_client.auth.signOut();
     currentUser = null;
     userProfile = null;
     showLoginForm();
@@ -562,7 +562,7 @@ async function watchAd() {
       
       // Update in database
       if (currentUser) {
-        const { error } = await supabase
+        const { error } = await supabase_client
           .from('profiles')
           .update({ 
             last_ad_watched: lastAdWatched,
@@ -576,7 +576,7 @@ async function watchAd() {
         
         // Update analytics
         try {
-          const { error: analyticsError } = await supabase
+          const { error: analyticsError } = await supabase_client
             .from('analytics')
             .insert([{
               user_id: currentUser.id,
@@ -619,7 +619,7 @@ async function resetScansAfterAd() {
   
   try {
     // Get the system settings to determine max scans
-    const { data: settingsData, error: settingsError } = await supabase
+    const { data: settingsData, error: settingsError } = await supabase_client
       .from('system_settings')
       .select('free_scans_per_day')
       .single();
@@ -628,7 +628,7 @@ async function resetScansAfterAd() {
     const maxScans = settingsData?.free_scans_per_day || defaultScans;
     
     // Update the user's scans_remaining to max value
-    const { error } = await supabase
+    const { error } = await supabase_client
       .from('profiles')
       .update({ scans_remaining: 999 }) 
       .eq('id', currentUser.id);
@@ -678,7 +678,7 @@ async function updateScansRemaining(scansUsed = 1) {
   const newScansRemaining = userProfile.scans_remaining - scansUsed;
   
   try {
-    const { error } = await supabase
+    const { error } = await supabase_client
       .from('profiles')
       .update({ scans_remaining: newScansRemaining })
       .eq('id', currentUser.id);
@@ -702,7 +702,7 @@ async function resetDailyScanCount() {
   const dayDiff = Math.floor((now - lastReset) / (1000 * 60 * 60 * 24));
   
   if (dayDiff >= 1) {
-    const { error } = await supabase
+    const { error } = await supabase_client
       .from('profiles')
       .update({
         scans_remaining: 5, 
@@ -724,7 +724,7 @@ async function resetDailyScanCount() {
 async function updateProfile(profileData) {
   if (!currentUser) return;
   
-  const { error } = await supabase
+  const { error } = await supabase_client
     .from('profiles')
     .update(profileData)
     .eq('id', currentUser.id);
@@ -871,7 +871,7 @@ function populateProfileModal() {
       // Update password if provided
       if (newPassword) {
         try {
-          const { error } = await supabase.auth.updateUser({
+          const { error } = await supabase_client.auth.updateUser({
             password: newPassword
           });
           
@@ -905,14 +905,14 @@ function populateProfileModal() {
         try {
           // Upload to supabase storage
           const fileName = `avatar-${currentUser.id}-${Date.now()}`;
-          const { data, error } = await supabase.storage
+          const { data, error } = await supabase_client.storage
             .from('avatars')
             .upload(fileName, file);
           
           if (error) throw error;
           
           // Get public URL
-          const { data: urlData } = await supabase.storage
+          const { data: urlData } = await supabase_client.storage
             .from('avatars')
             .getPublicUrl(fileName);
           
@@ -1038,6 +1038,9 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // Export functions to be used in other scripts
+window.showLoginForm = showLoginForm;
+window.showRegisterForm = showRegisterForm;
+
 window.auth = {
   checkAuth,
   updateScansRemaining,
@@ -1047,6 +1050,8 @@ window.auth = {
   userProfile: () => userProfile,
   isPremium: () => false, 
   lastAdWatched: () => lastAdWatched,
+  showLoginForm,
+  showRegisterForm,
   getNutritionalGoals: () => userProfile?.nutritional_goals || {
     calories: 2000,
     protein: 50,

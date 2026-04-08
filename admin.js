@@ -28,8 +28,10 @@ async function verifyAdminPermissions() {
     const userProfileData = window.auth.userProfile();
     if (!userProfileData || !userProfileData.is_admin) return false;
     
+    const sb = window.supabase_client;
+
     // Double check with server using RPC for extra security
-    const { data, error } = await supabase.rpc('verify_admin_permissions', {
+    const { data, error } = await sb.rpc('verify_admin_permissions', {
       user_id: window.auth.currentUser().id
     });
     
@@ -37,7 +39,7 @@ async function verifyAdminPermissions() {
     if (error) {
       console.warn("Admin verification RPC failed:", error);
       // Fallback to a direct query with permission check
-      const { data: profileData, error: profileError } = await supabase
+      const { data: profileData, error: profileError } = await sb
         .from('profiles')
         .select('is_admin')
         .eq('id', window.auth.currentUser().id)
@@ -89,8 +91,9 @@ async function showAdminDashboard() {
 async function loadUsers() {
   return secureAdminFunction(async () => {
     try {
+      const sb = window.supabase_client;
       // Get count for pagination
-      const { count, error: countError } = await supabase
+      const { count, error: countError } = await sb
         .from('profiles')
         .select('*', { count: 'exact', head: true });
       
@@ -98,7 +101,7 @@ async function loadUsers() {
       totalUsers = count;
       
       // Get paginated users
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from('profiles')
         .select('*')
         .range((currentPage - 1) * pageSize, currentPage * pageSize - 1)
@@ -180,8 +183,10 @@ async function editUser(userId) {
     editUserModal.className = 'modal';
     editUserModal.id = 'edit-user-modal';
     
+    const sb = window.supabase_client;
+
     // Fetch user data
-    supabase
+    sb
       .from('profiles')
       .select('*')
       .eq('id', userId)
@@ -253,7 +258,7 @@ async function editUser(userId) {
             }
             
             // Update user in Supabase
-            const { error } = await supabase
+            const { error } = await sb
               .from('profiles')
               .update(updatedData)
               .eq('id', userId);
@@ -283,16 +288,18 @@ async function deleteUser(userId) {
       return;
     }
     
+    const sb = window.supabase_client;
+
     try {
       // First delete all data related to the user
-      const { error: scanError } = await supabase
+      const { error: scanError } = await sb
         .from('scan_history')
         .delete()
         .eq('user_id', userId);
         
       if (scanError) console.error('Error deleting scan history:', scanError);
       
-      const { error: analyticsError } = await supabase
+      const { error: analyticsError } = await sb
         .from('analytics')
         .delete()
         .eq('user_id', userId);
@@ -300,7 +307,7 @@ async function deleteUser(userId) {
       if (analyticsError) console.error('Error deleting analytics:', analyticsError);
       
       // Delete user profile
-      const { error: profileError } = await supabase
+      const { error: profileError } = await sb
         .from('profiles')
         .delete()
         .eq('id', userId);
@@ -322,22 +329,23 @@ async function deleteUser(userId) {
 async function loadAnalytics() {
   return secureAdminFunction(async () => {
     try {
+      const sb = window.supabase_client;
       // Get total users count
-      const { count: userCount, error: userCountError } = await supabase
+      const { count: userCount, error: userCountError } = await sb
         .from('profiles')
         .select('*', { count: 'exact', head: true });
       
       if (userCountError) throw userCountError;
       
       // Get total scans count
-      const { count: scanCount, error: scanCountError } = await supabase
+      const { count: scanCount, error: scanCountError } = await sb
         .from('scan_history')
         .select('*', { count: 'exact', head: true });
       
       if (scanCountError) throw scanCountError;
       
       // Get ads watched count
-      const { count: adCount, error: adCountError } = await supabase
+      const { count: adCount, error: adCountError } = await sb
         .from('analytics')
         .select('*', { count: 'exact', head: true })
         .eq('event_type', 'ad_watched');
@@ -365,11 +373,12 @@ async function loadAnalytics() {
 // Create user growth chart
 async function createUserChart() {
   try {
+    const sb = window.supabase_client;
     // Get user signups by date for the last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('profiles')
       .select('created_at')
       .gte('created_at', thirtyDaysAgo.toISOString());
@@ -462,11 +471,12 @@ async function createUserChart() {
 // Create scans chart
 async function createScansChart() {
   try {
+    const sb = window.supabase_client;
     // Get scan counts by date for the last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('scan_history')
       .select('created_at, scan_type')
       .gte('created_at', thirtyDaysAgo.toISOString());
@@ -588,11 +598,12 @@ async function createScansChart() {
 // Create ad watched chart
 async function createAdWatchedChart() {
   try {
+    const sb = window.supabase_client;
     // Get ad watches by date for the last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('analytics')
       .select('created_at')
       .eq('event_type', 'ad_watched')
@@ -686,6 +697,7 @@ async function createAdWatchedChart() {
 async function loadAds() {
   return secureAdminFunction(async () => {
     try {
+      const sb = window.supabase_client;
       const adsTableBody = document.getElementById('ads-table-body');
       if (!adsTableBody) {
         console.error('Ads table body element not found');
@@ -696,7 +708,7 @@ async function loadAds() {
       adsTableBody.innerHTML = '<tr><td colspan="7" class="text-center">Loading ads...</td></tr>';
       
       // Fetch ads directly without filtering
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from('ads')
         .select('*')
         .order('created_at', { ascending: false });
@@ -775,15 +787,16 @@ async function loadAds() {
 async function showAddAdModal() {
   return secureAdminFunction(async () => {
     try {
+      const sb = window.supabase_client;
       // First check if ads table is properly structured
-      const { error: tableCheckError } = await supabase
+      const { error: tableCheckError } = await sb
         .from('ads')
         .select('id', { count: 'exact', head: true });
       
       if (tableCheckError) {
         // Create the table or fix structure if needed
         try {
-          await supabase.rpc('create_ads_table_if_needed');
+          await sb.rpc('create_ads_table_if_needed');
         } catch (rpcError) {
           console.log("RPC may not exist, trying direct SQL");
           // Fallback to direct SQL checks for older Supabase versions
@@ -953,7 +966,7 @@ async function showAddAdModal() {
         try {
           // For external ad providers, we can insert directly without file upload
           if (!isCustomAd) {
-            const { data: insertedAd, error: insertError } = await supabase
+            const { data: insertedAd, error: insertError } = await sb
               .from('ads')
               .insert([newAd])
               .select();
@@ -972,7 +985,7 @@ async function showAddAdModal() {
           }
           
           // Insert ad to get the ID for custom ads with uploads
-          const { data: insertedAd, error: insertError } = await supabase
+          const { data: insertedAd, error: insertError } = await sb
             .from('ads')
             .insert([newAd])
             .select();
@@ -993,7 +1006,7 @@ async function showAddAdModal() {
             const fileName = `ad_${adId}_${Date.now()}.${fileExt}`;
             
             // Upload file to Supabase storage
-            const { data: fileData, error: fileError } = await supabase.storage
+            const { data: fileData, error: fileError } = await sb.storage
               .from('ad_files')
               .upload(fileName, file, {
                 cacheControl: '3600',
@@ -1003,7 +1016,7 @@ async function showAddAdModal() {
             if (fileError) throw fileError;
             
             // Get public URL
-            const { data: urlData } = await supabase.storage
+            const { data: urlData } = await sb.storage
               .from('ad_files')
               .getPublicUrl(fileName);
             
@@ -1012,7 +1025,7 @@ async function showAddAdModal() {
             }
             
             // Update ad with file URL
-            const { error: updateError } = await supabase
+            const { error: updateError } = await sb
               .from('ads')
               .update({ file_url: urlData.publicUrl })
               .eq('id', adId);
@@ -1043,8 +1056,10 @@ async function editAd(adId) {
     editAdModal.className = 'modal';
     editAdModal.id = 'edit-ad-modal';
     
+    const sb = window.supabase_client;
+
     // Fetch ad data
-    supabase
+    sb
       .from('ads')
       .select('*')
       .eq('id', adId)
@@ -1233,7 +1248,7 @@ async function editAd(adId) {
               const fileName = `ad_${adId}_${Date.now()}.${fileExt}`;
               
               // Upload file to Supabase storage
-              const { data: fileData, error: fileError } = await supabase.storage
+              const { data: fileData, error: fileError } = await sb.storage
                 .from('ad_files')
                 .upload(fileName, file, {
                   cacheControl: '3600',
@@ -1243,7 +1258,7 @@ async function editAd(adId) {
               if (fileError) throw fileError;
               
               // Get public URL
-              const { data: urlData } = await supabase.storage
+              const { data: urlData } = await sb.storage
                 .from('ad_files')
                 .getPublicUrl(fileName);
               
@@ -1251,7 +1266,7 @@ async function editAd(adId) {
             }
             
             // Update ad in database
-            const { error } = await supabase
+            const { error } = await sb
               .from('ads')
               .update(updatedAd)
               .eq('id', adId);
@@ -1278,7 +1293,8 @@ async function editAd(adId) {
 async function toggleAd(adId, isActive) {
   return secureAdminFunction(async () => {
     try {
-      const { error } = await supabase
+      const sb = window.supabase_client;
+      const { error } = await sb
         .from('ads')
         .update({ active: !isActive })
         .eq('id', adId);
@@ -1303,7 +1319,8 @@ async function deleteAd(adId) {
     }
     
     try {
-      const { error } = await supabase
+      const sb = window.supabase_client;
+      const { error } = await sb
         .from('ads')
         .delete()
         .eq('id', adId);
@@ -1396,7 +1413,8 @@ async function showPlacementManagerModal() {
       const description = document.getElementById('placement-description').value;
       
       try {
-        const { error } = await supabase
+        const sb = window.supabase_client;
+        const { error } = await sb
           .from('ad_placements')
           .insert([{ name, placement_key: key, description }]);
         
@@ -1423,19 +1441,20 @@ async function loadPlacements() {
   if (!tableBody) return;
   
   try {
+    const sb = window.supabase_client;
     // First check if the table exists
-    const { data: tableInfo, error: tableError } = await supabase
+    const { data: tableInfo, error: tableError } = await sb
       .from('ad_placements')
       .select('*', { count: 'exact', head: true });
     
     if (tableError && tableError.code === 'PGRST116') {
       // Table doesn't exist, create it
-      await supabase.rpc('create_ad_placements_table');
+      await sb.rpc('create_ad_placements_table');
       tableBody.innerHTML = '<tr><td colspan="4" class="text-center">Creating placements table. Please try again.</td></tr>';
       return;
     }
     
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('ad_placements')
       .select('*')
       .order('name');
@@ -1498,7 +1517,8 @@ async function loadPlacements() {
 async function editPlacement(id) {
   return secureAdminFunction(async () => {
     try {
-      const { data, error } = await supabase
+      const sb = window.supabase_client;
+      const { data, error } = await sb
         .from('ad_placements')
         .select('*')
         .eq('id', id)
@@ -1554,7 +1574,7 @@ async function editPlacement(id) {
         const description = document.getElementById('edit-placement-description').value;
         
         try {
-          const { error } = await supabase
+          const { error } = await sb
             .from('ad_placements')
             .update({ name, description })
             .eq('id', id);
@@ -1585,7 +1605,8 @@ async function deletePlacement(id) {
     }
     
     try {
-      const { error } = await supabase
+      const sb = window.supabase_client;
+      const { error } = await sb
         .from('ad_placements')
         .delete()
         .eq('id', id);
@@ -1732,7 +1753,8 @@ async function searchUsers(searchTerm) {
   }
   
   try {
-    const { data, error } = await supabase
+    const sb = window.supabase_client;
+    const { data, error } = await sb
       .from('profiles')
       .select('*')
       .or(`full_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`);
@@ -1757,8 +1779,9 @@ async function searchUsers(searchTerm) {
 // Generate and download user report
 async function generateUserReport() {
   try {
+    const sb = window.supabase_client;
     // Get all users
-    supabase
+    sb
       .from('profiles')
       .select('*')
       .order('created_at', { ascending: false })
@@ -1802,8 +1825,9 @@ async function generateUserReport() {
 // Generate and download scan report
 async function generateScanReport() {
   try {
+    const sb = window.supabase_client;
     // Get all scans
-    supabase
+    sb
       .from('scan_history')
       .select('*, profiles(email, full_name)')
       .order('created_at', { ascending: false })
@@ -1855,7 +1879,8 @@ async function resetAllUserScans() {
   }
   
   try {
-    const { error } = await supabase
+    const sb = window.supabase_client;
+    const { error } = await sb
       .from('profiles')
       .update({ 
         scans_remaining: 5,
@@ -1936,7 +1961,8 @@ async function sendMassNotification() {
 async function loadSettings() {
   return secureAdminFunction(async () => {
     try {
-      const { data, error } = await supabase
+      const sb = window.supabase_client;
+      const { data, error } = await sb
         .from('system_settings')
         .select('*')
         .single();
@@ -1969,8 +1995,9 @@ async function saveSettings(e) {
   };
   
   try {
+    const sb = window.supabase_client;
     // Check if settings exist
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('system_settings')
       .select('id')
       .single();
@@ -1981,13 +2008,13 @@ async function saveSettings(e) {
     
     if (data) {
       // Update existing settings
-      result = await supabase
+      result = await sb
         .from('system_settings')
         .update(settings)
         .eq('id', data.id);
     } else {
       // Insert new settings
-      result = await supabase
+      result = await sb
         .from('system_settings')
         .insert([{ ...settings, id: 1 }]);
     }

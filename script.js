@@ -218,8 +218,9 @@ fileInput.addEventListener('change', async e => {
 async function logScan(scanType, scanData) {
   if (!window.auth.currentUser()) return;
   
+  const sb = window.supabase_client;
   try {
-    await supabase
+    await sb
       .from('scan_history')
       .insert([{
         user_id: window.auth.currentUser().id,
@@ -686,7 +687,8 @@ async function logCurrentMeal() {
             sodium: parseNum(nutrition.sodium)
         };
 
-        const { error } = await supabase
+        const sb = window.supabase_client;
+        const { error } = await sb
             .from('daily_logs')
             .insert([logData]);
 
@@ -1794,12 +1796,13 @@ function showDashboard() {
 async function fetchDashboardData() {
   if (!window.auth.currentUser()) return;
   
+  const sb = window.supabase_client;
   try {
     // Fetch daily logs for the last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const { data: logsData, error: logsError } = await supabase
+    const { data: logsData, error: logsError } = await sb
         .from('daily_logs')
         .select('*')
         .eq('user_id', window.auth.currentUser().id)
@@ -1809,7 +1812,7 @@ async function fetchDashboardData() {
     if (logsError) throw logsError;
 
     // Fetch scan history
-    const { data: scanData, error: scanError } = await supabase
+    const { data: scanData, error: scanError } = await sb
       .from('scan_history')
       .select('*')
       .eq('user_id', window.auth.currentUser().id)
@@ -1819,7 +1822,7 @@ async function fetchDashboardData() {
     if (scanError) throw scanError;
     
     // Fetch health goals
-    const { data: goalData, error: goalError } = await supabase
+    const { data: goalData, error: goalError } = await sb
       .from('health_goals')
       .select('*')
       .eq('user_id', window.auth.currentUser().id)
@@ -1828,7 +1831,7 @@ async function fetchDashboardData() {
     if (goalError) throw goalError;
     
     // Fetch profile for scans remaining
-    const { data: profileData, error: profileError } = await supabase
+    const { data: profileData, error: profileError } = await sb
       .from('profiles')
       .select('scans_remaining')
       .eq('id', window.auth.currentUser().id)
@@ -2169,8 +2172,9 @@ async function saveGoal() {
       return;
     }
     
+    const sb = window.supabase_client;
     // Check for duplicate goal prevention
-    const { data: existingGoals, error: checkError } = await supabase
+    const { data: existingGoals, error: checkError } = await sb
       .from('health_goals')
       .select('id')
       .eq('user_id', window.auth.currentUser().id)
@@ -2185,7 +2189,7 @@ async function saveGoal() {
       return;
     }
     
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('health_goals')
       .insert([{
         user_id: window.auth.currentUser().id,
@@ -2222,7 +2226,8 @@ async function deleteGoal(goalId) {
   }
   
   try {
-    const { error } = await supabase
+    const sb = window.supabase_client;
+    const { error } = await sb
       .from('health_goals')
       .delete()
       .eq('id', goalId);
@@ -2271,8 +2276,9 @@ function toggleTheme() {
 // Load ads
 async function loadAds() {
   try {
+    const sb = window.supabase_client;
     // Get active ads for each placement
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('ads')
       .select('*')
       .eq('active', true)
@@ -2375,14 +2381,15 @@ async function loadAds() {
 async function logAdImpression(adId) {
   if (!window.auth.currentUser()) return;
   
+  const sb = window.supabase_client;
   try {
-    await supabase
+    await sb
       .from('ads')
-      .update({ impressions: supabase.rpc('increment', { count: 1 }) })
+      .update({ impressions: sb.rpc('increment', { count: 1 }) })
       .eq('id', adId);
     
     // Also log in analytics
-    await supabase
+    await sb
       .from('analytics')
       .insert([{
         user_id: window.auth.currentUser().id,
@@ -2398,14 +2405,15 @@ async function logAdImpression(adId) {
 async function logAdClick(adId) {
   if (!window.auth.currentUser()) return;
   
+  const sb = window.supabase_client;
   try {
-    await supabase
+    await sb
       .from('ads')
-      .update({ clicks: supabase.rpc('increment', { count: 1 }) })
+      .update({ clicks: sb.rpc('increment', { count: 1 }) })
       .eq('id', adId);
     
     // Also log in analytics
-    await supabase
+    await sb
       .from('analytics')
       .insert([{
         user_id: window.auth.currentUser().id,
