@@ -1,8 +1,11 @@
 // Supabase initialization
 const supabaseUrl = 'https://msooyauwfmzfrvsdzxhn.supabase.co';
 const supabaseKey = 'sb_publishable_Mmk7EBnekxE4treg8XKHZg_ld7NGC5M';
-// Use var to allow redeclaration if the library already defined it
-var supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+// Initialize Supabase client
+const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+// Use a consistent variable name throughout the app
+window.supabase = supabaseClient;
+const supabase = supabaseClient;
 
 // DOM elements
 const authContainer = document.getElementById('auth-container');
@@ -21,26 +24,6 @@ const premiumNotification = document.getElementById('premium-notification');
 let currentUser = null;
 let userProfile = null;
 let lastAdWatched = null;
-
-// Export functions immediately to window.auth
-window.auth = {
-  checkAuth: () => checkAuth(),
-  updateScansRemaining: (scans) => updateScansRemaining(scans),
-  resetDailyScanCount: () => resetDailyScanCount(),
-  watchAd: () => watchAd(),
-  currentUser: () => currentUser,
-  userProfile: () => userProfile,
-  isPremium: () => false,
-  lastAdWatched: () => lastAdWatched,
-  getNutritionalGoals: () => userProfile?.nutritional_goals || {
-    calories: 2000,
-    protein: 50,
-    carbs: 275,
-    fat: 78,
-    sugar: 50,
-    sodium: 2300
-  }
-};
 
 async function calculateNutritionalGoals(profile) {
     const prompt = `Based on the following user profile, calculate daily nutritional limits:
