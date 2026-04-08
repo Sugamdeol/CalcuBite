@@ -590,6 +590,12 @@ function populateProfileModal() {
     personalizationStatus.innerHTML = '<i class="fas fa-info-circle"></i> Fill your profile to enable AI personalized daily limits';
   }
 
+  // Handle plan-related display (legacy support for unified experience)
+  const proBadge = document.getElementById('pro-plan-badge');
+  const freeBadge = document.getElementById('free-plan-badge');
+  if (proBadge) proBadge.style.display = 'inline-block';
+  if (freeBadge) freeBadge.style.display = 'none';
+
   // Form submission
   const profileForm = document.getElementById('profile-form');
   if (profileForm) {
@@ -701,17 +707,11 @@ function populateProfileModal() {
     };
   }
   
-  // Upgrade plan button with null check
-  if (upgradePlanBtn) {
-    upgradePlanBtn.onclick = () => {
-      watchAd();
-    };
-  }
 }
 
 // Show upgrade modal
 function showUpgradeModal() {
-  // Not needed
+  // Not needed in unified experience
 }
 
 // Initialize event listeners
@@ -733,7 +733,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (profileLink) {
     profileLink.addEventListener('click', (e) => {
       e.preventDefault();
-      showProfileModal();
+      e.stopPropagation();
+      window.showProfileModal();
     });
   }
   
@@ -792,6 +793,7 @@ window.addEventListener('DOMContentLoaded', () => {
 // Export functions to be used in other scripts
 window.showLoginForm = showLoginForm;
 window.showRegisterForm = showRegisterForm;
+window.showProfileModal = showProfileModal;
 
 window.auth = {
   checkAuth,

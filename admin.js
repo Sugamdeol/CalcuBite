@@ -6,7 +6,6 @@ const adminTabs = document.querySelectorAll('.admin-tab');
 const adminTabContents = document.querySelectorAll('.admin-tab-content');
 const usersTableBody = document.getElementById('users-table-body');
 const totalUsersElement = document.getElementById('total-users');
-const proUsersElement = document.getElementById('pro-users');
 const totalScansElement = document.getElementById('total-scans');
 const settingsForm = document.getElementById('settings-form');
 
@@ -342,9 +341,10 @@ async function loadAnalytics() {
       if (scanCountError) throw scanCountError;
       
       // Update UI
-      totalUsersElement.textContent = userCount;
-      document.getElementById('daily-active-users').textContent = Math.floor(userCount * 0.4);
-      totalScansElement.textContent = scanCount || 0;
+      if (totalUsersElement) totalUsersElement.textContent = userCount;
+      const dauElem = document.getElementById('daily-active-users');
+      if (dauElem) dauElem.textContent = Math.floor(userCount * 0.4);
+      if (totalScansElement) totalScansElement.textContent = scanCount || 0;
       
       // Create charts
       createUserChart();
@@ -1496,7 +1496,8 @@ async function loadSettings() {
       if (error && error.code !== 'PGRST116') throw error;
       
       if (data) {
-        document.getElementById('free-scans').value = data.free_scans_per_day;
+        const freeScansInput = document.getElementById('free-scans');
+        if (freeScansInput) freeScansInput.value = data.free_scans_per_day;
         document.getElementById('enable-registration').checked = data.registration_enabled;
       }
       
@@ -1511,8 +1512,9 @@ async function loadSettings() {
 async function saveSettings(e) {
   e.preventDefault();
   
+  const freeScansInput = document.getElementById('free-scans');
   const settings = {
-    free_scans_per_day: parseInt(document.getElementById('free-scans').value),
+    free_scans_per_day: freeScansInput ? parseInt(freeScansInput.value) : 999999,
     registration_enabled: document.getElementById('enable-registration').checked
   };
   

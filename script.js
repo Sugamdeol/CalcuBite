@@ -549,7 +549,12 @@ Your response MUST be valid JSON with this structure:
     if (data && data.content) {
       // Try parsing as JSON if content is a string
       if (typeof data.content === 'string') {
-        analysisData = JSON.parse(data.content);
+        let content = data.content.trim();
+        // Remove markdown code blocks if present
+        if (content.startsWith('```')) {
+          content = content.replace(/^```(?:json)?\s*|\s*```$/g, '');
+        }
+        analysisData = JSON.parse(content);
       } else if (typeof data.content === 'object') {
         // If content is already an object
         analysisData = data.content;
@@ -1546,11 +1551,19 @@ If the user asks about something not related to nutrition or health, politely re
 // Show dashboard functionality
 function showDashboard() {
   // AI Personalization check: If profile is not complete, prompt user
-  const profile = window.auth.userProfile();
-  if (profile && (!profile.gender || !profile.age || !profile.weight_kg)) {
-    if (confirm("Your profile is incomplete. Would you like to fill it out now to enable AI-calculated daily nutritional limits?")) {
-        showProfileModal();
-        return;
+  if (window.auth) {
+    const profile = window.auth.userProfile();
+    if (profile && (!profile.gender || !profile.age || !profile.weight_kg)) {
+      if (confirm("Personalize your health experience? \n\nFill out your profile details to enable AI-calculated daily limits for calories, protein, and more!")) {
+          if (window.showProfileModal) {
+            window.showProfileModal();
+          } else {
+            // Fallback just in case
+            const btn = document.getElementById('profile-link');
+            if (btn) btn.click();
+          }
+          return;
+      }
     }
   }
 
