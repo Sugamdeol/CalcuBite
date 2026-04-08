@@ -248,12 +248,9 @@ function showLoginForm() {
   const loginForm = document.getElementById('login-form');
   const registerLink = document.getElementById('register-link');
   const forgotPasswordLink = document.getElementById('forgot-password-link');
-  const googleLoginBtn = document.getElementById('google-login');
-  
   if (loginForm) loginForm.addEventListener('submit', handleLogin);
   if (registerLink) registerLink.addEventListener('click', showRegisterForm);
   if (forgotPasswordLink) forgotPasswordLink.addEventListener('click', showResetPasswordForm);
-  if (googleLoginBtn) googleLoginBtn.addEventListener('click', handleGoogleLogin);
   
   // Password visibility toggle
   const togglePassword = document.querySelector('.toggle-password');
@@ -290,7 +287,6 @@ function showRegisterForm(e) {
   // Add event listeners
   document.getElementById('register-form').addEventListener('submit', handleRegister);
   document.getElementById('login-link').addEventListener('click', showLoginForm);
-  document.getElementById('google-register').addEventListener('click', handleGoogleLogin);
   
   // Password visibility toggle
   const togglePassword = document.querySelector('.toggle-password');
@@ -451,24 +447,6 @@ async function handleResetPassword(e) {
       errorElement.style.display = 'block';
       errorElement.textContent = error.message || 'Failed to send reset link. Please try again.';
     }
-  }
-}
-
-// Handle Google login
-async function handleGoogleLogin() {
-  try {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin
-      }
-    });
-    
-    if (error) throw error;
-    
-  } catch (error) {
-    console.error('Google login error:', error);
-    alert('Failed to login with Google. Please try again.');
   }
 }
 
