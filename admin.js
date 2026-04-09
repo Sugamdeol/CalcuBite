@@ -5,11 +5,8 @@ const adminDashboard = document.getElementById('admin-dashboard');
 const adminTabs = document.querySelectorAll('.admin-tab');
 const adminTabContents = document.querySelectorAll('.admin-tab-content');
 const usersTableBody = document.getElementById('users-table-body');
-const adsTableBody = document.getElementById('ads-table-body');
 const totalUsersElement = document.getElementById('total-users');
-const proUsersElement = document.getElementById('pro-users');
 const totalScansElement = document.getElementById('total-scans');
-const adsWatchedElement = document.getElementById('ads-watched');
 const settingsForm = document.getElementById('settings-form');
 
 // Global variables
@@ -28,8 +25,10 @@ async function verifyAdminPermissions() {
     const userProfileData = window.auth.userProfile();
     if (!userProfileData || !userProfileData.is_admin) return false;
     
+    const sb = window.sb;
+
     // Double check with server using RPC for extra security
-    const { data, error } = await supabase.rpc('verify_admin_permissions', {
+    const { data, error } = await sb.rpc('verify_admin_permissions', {
       user_id: window.auth.currentUser().id
     });
     
@@ -37,7 +36,7 @@ async function verifyAdminPermissions() {
     if (error) {
       console.warn("Admin verification RPC failed:", error);
       // Fallback to a direct query with permission check
-      const { data: profileData, error: profileError } = await supabase
+      const { data: profileData, error: profileError } = await sb
         .from('profiles')
         .select('is_admin')
         .eq('id', window.auth.currentUser().id)
@@ -77,7 +76,6 @@ async function showAdminDashboard() {
     adminDashboard.style.display = 'block';
     loadUsers();
     loadAnalytics();
-    loadAds();
     loadSettings();
   }).catch(error => {
     console.error("Admin verification error:", error);
@@ -89,8 +87,9 @@ async function showAdminDashboard() {
 async function loadUsers() {
   return secureAdminFunction(async () => {
     try {
+      const sb = window.sb;
       // Get count for pagination
-      const { count, error: countError } = await supabase
+      const { count, error: countError } = await sb
         .from('profiles')
         .select('*', { count: 'exact', head: true });
       
@@ -98,7 +97,7 @@ async function loadUsers() {
       totalUsers = count;
       
       // Get paginated users
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from('profiles')
         .select('*')
         .range((currentPage - 1) * pageSize, currentPage * pageSize - 1)
@@ -180,8 +179,10 @@ async function editUser(userId) {
     editUserModal.className = 'modal';
     editUserModal.id = 'edit-user-modal';
     
+    const sb = window.sb;
+
     // Fetch user data
-    supabase
+    sb
       .from('profiles')
       .select('*')
       .eq('id', userId)
@@ -253,7 +254,7 @@ async function editUser(userId) {
             }
             
             // Update user in Supabase
-            const { error } = await supabase
+            const { error } = await sb
               .from('profiles')
               .update(updatedData)
               .eq('id', userId);
@@ -283,16 +284,18 @@ async function deleteUser(userId) {
       return;
     }
     
+    const sb = window.sb;
+
     try {
       // First delete all data related to the user
-      const { error: scanError } = await supabase
+      const { error: scanError } = await sb
         .from('scan_history')
         .delete()
         .eq('user_id', userId);
         
       if (scanError) console.error('Error deleting scan history:', scanError);
       
-      const { error: analyticsError } = await supabase
+      const { error: analyticsError } = await sb
         .from('analytics')
         .delete()
         .eq('user_id', userId);
@@ -300,7 +303,7 @@ async function deleteUser(userId) {
       if (analyticsError) console.error('Error deleting analytics:', analyticsError);
       
       // Delete user profile
-      const { error: profileError } = await supabase
+      const { error: profileError } = await sb
         .from('profiles')
         .delete()
         .eq('id', userId);
@@ -322,38 +325,30 @@ async function deleteUser(userId) {
 async function loadAnalytics() {
   return secureAdminFunction(async () => {
     try {
+      const sb = window.sb;
       // Get total users count
-      const { count: userCount, error: userCountError } = await supabase
+      const { count: userCount, error: userCountError } = await sb
         .from('profiles')
         .select('*', { count: 'exact', head: true });
       
       if (userCountError) throw userCountError;
       
       // Get total scans count
-      const { count: scanCount, error: scanCountError } = await supabase
+      const { count: scanCount, error: scanCountError } = await sb
         .from('scan_history')
         .select('*', { count: 'exact', head: true });
       
       if (scanCountError) throw scanCountError;
       
-      // Get ads watched count
-      const { count: adCount, error: adCountError } = await supabase
-        .from('analytics')
-        .select('*', { count: 'exact', head: true })
-        .eq('event_type', 'ad_watched');
-      
-      if (adCountError) throw adCountError;
-      
       // Update UI
-      totalUsersElement.textContent = userCount;
-      document.getElementById('daily-active-users').textContent = Math.floor(userCount * 0.4);
-      totalScansElement.textContent = scanCount || 0;
-      adsWatchedElement.textContent = adCount || 0;
+      if (totalUsersElement) totalUsersElement.textContent = userCount;
+      const dauElem = document.getElementById('daily-active-users');
+      if (dauElem) dauElem.textContent = Math.floor(userCount * 0.4);
+      if (totalScansElement) totalScansElement.textContent = scanCount || 0;
       
       // Create charts
       createUserChart();
       createScansChart();
-      createAdWatchedChart();
       
     } catch (error) {
       console.error('Error loading analytics:', error);
@@ -365,11 +360,12 @@ async function loadAnalytics() {
 // Create user growth chart
 async function createUserChart() {
   try {
+    const sb = window.sb;
     // Get user signups by date for the last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('profiles')
       .select('created_at')
       .gte('created_at', thirtyDaysAgo.toISOString());
@@ -462,11 +458,12 @@ async function createUserChart() {
 // Create scans chart
 async function createScansChart() {
   try {
+    const sb = window.sb;
     // Get scan counts by date for the last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('scan_history')
       .select('created_at, scan_type')
       .gte('created_at', thirtyDaysAgo.toISOString());
@@ -585,205 +582,25 @@ async function createScansChart() {
   }
 }
 
-// Create ad watched chart
-async function createAdWatchedChart() {
-  try {
-    // Get ad watches by date for the last 30 days
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
-    const { data, error } = await supabase
-      .from('analytics')
-      .select('created_at')
-      .eq('event_type', 'ad_watched')
-      .gte('created_at', thirtyDaysAgo.toISOString());
-    
-    if (error) throw error;
-    
-    // Process data for chart
-    const dateMap = {};
-    
-    // Initialize all dates in the range
-    for (let i = 0; i < 30; i++) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      dateMap[dateStr] = 0;
-    }
-    
-    // Count ad watches by date
-    data.forEach(watch => {
-      const dateStr = watch.created_at.split('T')[0];
-      if (dateMap[dateStr] !== undefined) {
-        dateMap[dateStr]++;
-      }
-    });
-    
-    // Sort dates and prepare chart data
-    const sortedDates = Object.keys(dateMap).sort();
-    const chartData = sortedDates.map(date => dateMap[date]);
-    
-    // Format dates for display
-    const formattedLabels = sortedDates.map(date => {
-      const d = new Date(date);
-      return `${d.getMonth() + 1}/${d.getDate()}`;
-    });
-    
-    // Create chart
-    const ctx = document.getElementById('revenue-chart').getContext('2d');
-    
-    if (window.revenueChartInstance) {
-      window.revenueChartInstance.destroy();
-    }
-    
-    window.revenueChartInstance = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: formattedLabels,
-        datasets: [{
-          label: 'Ads Watched',
-          data: chartData,
-          backgroundColor: 'rgba(245, 158, 11, 0.2)',
-          borderColor: 'rgba(245, 158, 11, 1)',
-          borderWidth: 2,
-          tension: 0.4,
-          fill: true
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            display: true,
-            position: 'top'
-          },
-          title: {
-            display: true,
-            text: 'Ads Watched (Last 30 Days)',
-            font: {
-              size: 16
-            }
-          }
-        },
-        scales: {
-          y: {
-            beginAtZero: true,
-            ticks: {
-              precision: 0
-            }
-          }
-        }
-      }
-    });
-    
-  } catch (error) {
-    console.error('Error creating ad watched chart:', error);
-  }
-}
-
 // Load ads data
 async function loadAds() {
-  return secureAdminFunction(async () => {
-    try {
-      const adsTableBody = document.getElementById('ads-table-body');
-      if (!adsTableBody) {
-        console.error('Ads table body element not found');
-        return;
-      }
-      
-      // Add loading indicator
-      adsTableBody.innerHTML = '<tr><td colspan="7" class="text-center">Loading ads...</td></tr>';
-      
-      // Fetch ads directly without filtering
-      const { data, error } = await supabase
-        .from('ads')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        console.error('Error loading ads:', error);
-        adsTableBody.innerHTML = `<tr><td colspan="7" class="text-center">Error loading ads: ${error.message}</td></tr>`;
-        return;
-      }
-      
-      // Render ads table
-      adsTableBody.innerHTML = '';
-      
-      if (!data || data.length === 0) {
-        adsTableBody.innerHTML = `
-          <tr>
-            <td colspan="7" class="text-center">No ads found. Click "Add New Ad" to create your first ad.</td>
-          </tr>
-        `;
-        return;
-      }
-      
-      data.forEach(ad => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td>${ad.id}</td>
-          <td>${ad.name || 'Untitled Ad'}</td>
-          <td>${ad.provider || 'Custom'}</td>
-          <td>${ad.placement || 'In-content'}</td>
-          <td>${ad.type || 'Banner'}</td>
-          <td>
-            <span class="status-badge badge-${ad.active ? 'success' : 'secondary'}">
-              ${ad.active ? 'Active' : 'Inactive'}
-            </span>
-          </td>
-          <td>
-            <button class="action-btn edit-ad" data-id="${ad.id}">
-              <i class="fas fa-edit"></i>
-            </button>
-            <button class="action-btn toggle-ad" data-id="${ad.id}" data-active="${ad.active}">
-              <i class="fas fa-${ad.active ? 'pause' : 'play'}"></i>
-            </button>
-            <button class="action-btn delete-ad" data-id="${ad.id}">
-              <i class="fas fa-trash-alt"></i>
-            </button>
-          </td>
-        `;
-        
-        adsTableBody.appendChild(row);
-      });
-      
-      // Add event listeners
-      document.querySelectorAll('.edit-ad').forEach(btn => {
-        btn.addEventListener('click', () => editAd(btn.dataset.id));
-      });
-      
-      document.querySelectorAll('.toggle-ad').forEach(btn => {
-        btn.addEventListener('click', () => toggleAd(btn.dataset.id, btn.dataset.active === 'true'));
-      });
-      
-      document.querySelectorAll('.delete-ad').forEach(btn => {
-        btn.addEventListener('click', () => deleteAd(btn.dataset.id));
-      });
-      
-    } catch (error) {
-      console.error('Error in loadAds function:', error);
-      const adsTableBody = document.getElementById('ads-table-body');
-      if (adsTableBody) {
-        adsTableBody.innerHTML = `<tr><td colspan="7" class="text-center">Error: ${error.message}</td></tr>`;
-      }
-    }
-  });
+    // Ad system removed
 }
 
 // Show add ad modal
 async function showAddAdModal() {
   return secureAdminFunction(async () => {
     try {
+      const sb = window.sb;
       // First check if ads table is properly structured
-      const { error: tableCheckError } = await supabase
+      const { error: tableCheckError } = await sb
         .from('ads')
         .select('id', { count: 'exact', head: true });
       
       if (tableCheckError) {
         // Create the table or fix structure if needed
         try {
-          await supabase.rpc('create_ads_table_if_needed');
+          await sb.rpc('create_ads_table_if_needed');
         } catch (rpcError) {
           console.log("RPC may not exist, trying direct SQL");
           // Fallback to direct SQL checks for older Supabase versions
@@ -953,7 +770,7 @@ async function showAddAdModal() {
         try {
           // For external ad providers, we can insert directly without file upload
           if (!isCustomAd) {
-            const { data: insertedAd, error: insertError } = await supabase
+            const { data: insertedAd, error: insertError } = await sb
               .from('ads')
               .insert([newAd])
               .select();
@@ -972,7 +789,7 @@ async function showAddAdModal() {
           }
           
           // Insert ad to get the ID for custom ads with uploads
-          const { data: insertedAd, error: insertError } = await supabase
+          const { data: insertedAd, error: insertError } = await sb
             .from('ads')
             .insert([newAd])
             .select();
@@ -993,7 +810,7 @@ async function showAddAdModal() {
             const fileName = `ad_${adId}_${Date.now()}.${fileExt}`;
             
             // Upload file to Supabase storage
-            const { data: fileData, error: fileError } = await supabase.storage
+            const { data: fileData, error: fileError } = await sb.storage
               .from('ad_files')
               .upload(fileName, file, {
                 cacheControl: '3600',
@@ -1003,7 +820,7 @@ async function showAddAdModal() {
             if (fileError) throw fileError;
             
             // Get public URL
-            const { data: urlData } = await supabase.storage
+            const { data: urlData } = await sb.storage
               .from('ad_files')
               .getPublicUrl(fileName);
             
@@ -1012,7 +829,7 @@ async function showAddAdModal() {
             }
             
             // Update ad with file URL
-            const { error: updateError } = await supabase
+            const { error: updateError } = await sb
               .from('ads')
               .update({ file_url: urlData.publicUrl })
               .eq('id', adId);
@@ -1037,248 +854,15 @@ async function showAddAdModal() {
 
 // Edit ad
 async function editAd(adId) {
-  return secureAdminFunction(async () => {
-    // Create and show edit ad modal
-    const editAdModal = document.createElement('div');
-    editAdModal.className = 'modal';
-    editAdModal.id = 'edit-ad-modal';
-    
-    // Fetch ad data
-    supabase
-      .from('ads')
-      .select('*')
-      .eq('id', adId)
-      .single()
-      .then(({ data, error }) => {
-        if (error) {
-          console.error('Error fetching ad:', error);
-          alert('Error fetching ad details. Please try again.');
-          return;
-        }
-        
-        // Generate placement options
-        let placementOptions = `
-          <option value="header" ${data.placement === 'header' ? 'selected' : ''}>Header</option>
-          <option value="sidebar" ${data.placement === 'sidebar' ? 'selected' : ''}>Sidebar</option>
-          <option value="in-content" ${data.placement === 'in-content' || !data.placement ? 'selected' : ''}>In-Content</option>
-          <option value="results" ${data.placement === 'results' ? 'selected' : ''}>Results</option>
-          <option value="footer" ${data.placement === 'footer' ? 'selected' : ''}>Footer</option>
-        `;
-        
-        // Create modal content
-        editAdModal.innerHTML = `
-          <div class="modal-content">
-            <div class="modal-header">
-              <h2><i class="fas fa-edit"></i> Edit Ad</h2>
-              <span class="close-modal">&times;</span>
-            </div>
-            <div class="modal-body">
-              <form id="edit-ad-form">
-                <div class="form-group">
-                  <label for="edit-ad-name">Ad Name</label>
-                  <input type="text" id="edit-ad-name" value="${data.name || ''}" required>
-                </div>
-                
-                <div class="form-group">
-                  <label for="edit-ad-provider">Ad Provider</label>
-                  <select id="edit-ad-provider" required>
-                    <option value="custom" ${data.provider === 'custom' || !data.provider ? 'selected' : ''}>Custom Ad</option>
-                    <option value="adsense" ${data.provider === 'adsense' ? 'selected' : ''}>Google AdSense</option>
-                    <option value="adsterra" ${data.provider === 'adsterra' ? 'selected' : ''}>Adsterra</option>
-                    <option value="admanager" ${data.provider === 'admanager' ? 'selected' : ''}>Google Ad Manager</option>
-                    <option value="other" ${data.provider === 'other' ? 'selected' : ''}>Other Provider</option>
-                  </select>
-                </div>
-                
-                <div id="custom-ad-fields" style="display: ${data.provider !== 'adsense' && data.provider !== 'adsterra' && data.provider !== 'admanager' && data.provider !== 'other' ? 'block' : 'none'}">
-                  <div class="form-group">
-                    <label for="edit-ad-type">Ad Type</label>
-                    <select id="edit-ad-type" required>
-                      <option value="banner" ${data.type === 'banner' || !data.type ? 'selected' : ''}>Banner</option>
-                      <option value="video" ${data.type === 'video' ? 'selected' : ''}>Video</option>
-                      <option value="native" ${data.type === 'native' ? 'selected' : ''}>Native Ad</option>
-                      <option value="interstitial" ${data.type === 'interstitial' ? 'selected' : ''}>Interstitial</option>
-                      <option value="sticky" ${data.type === 'sticky' ? 'selected' : ''}>Sticky Banner</option>
-                    </select>
-                  </div>
-                  
-                  <div class="form-group">
-                    <label for="edit-ad-duration">Duration (seconds for video ads)</label>
-                    <input type="number" id="edit-ad-duration" value="${data.duration || 30}" min="0">
-                  </div>
-                  
-                  <div class="form-group">
-                    <label for="edit-ad-file">Ad File (Image/Video)</label>
-                    <input type="file" id="edit-ad-file" accept="${data.type === 'video' ? 'video/*' : 'image/*'}">
-                    ${data.file_url ? `<p>Current file: <a href="${data.file_url}" target="_blank">View</a></p>` : ''}
-                  </div>
-                  
-                  <div class="form-group">
-                    <label for="edit-ad-size">Ad Size</label>
-                    <select id="edit-ad-size">
-                      <option value="small" ${data.size === 'small' ? 'selected' : ''}>Small (300x250)</option>
-                      <option value="medium" ${data.size === 'medium' || !data.size ? 'selected' : ''}>Medium (728x90)</option>
-                      <option value="large" ${data.size === 'large' ? 'selected' : ''}>Large (970x250)</option>
-                    </select>
-                  </div>
-                </div>
-                
-                <div id="external-ad-fields" style="display: ${data.provider === 'adsense' || data.provider === 'adsterra' || data.provider === 'admanager' || data.provider === 'other' ? 'block' : 'none'}">
-                  <div class="form-group">
-                    <label for="edit-ad-code">Ad Code (Copy and paste provider code)</label>
-                    <textarea id="edit-ad-code" rows="5">${data.ad_code || ''}</textarea>
-                    <small>Paste JavaScript ad code from AdSense, Adsterra or other ad providers</small>
-                  </div>
-                </div>
-                
-                <div class="form-group">
-                  <label for="edit-ad-placement">Ad Placement</label>
-                  <select id="edit-ad-placement" required>
-                    ${placementOptions}
-                  </select>
-                </div>
-                
-                <div class="form-group">
-                  <label class="checkbox-container">
-                    <input type="checkbox" id="edit-ad-active" ${data.active ? 'checked' : ''}>
-                    <span class="checkmark"></span>
-                    Active
-                  </label>
-                </div>
-                
-                <div class="form-group">
-                  <label>Statistics</label>
-                  <div>
-                    <p>Impressions: ${data.impressions || 0}</p>
-                    <p>Clicks: ${data.clicks || 0}</p>
-                  </div>
-                </div>
-                
-                <button type="submit" class="primary-button">Save Changes</button>
-              </form>
-            </div>
-          </div>
-        `;
-        
-        document.body.appendChild(editAdModal);
-        editAdModal.style.display = 'block';
-        
-        // Add event listeners
-        const closeBtn = editAdModal.querySelector('.close-modal');
-        closeBtn.addEventListener('click', () => {
-          editAdModal.remove();
-        });
-        
-        // Toggle fields based on provider selection
-        const providerSelect = document.getElementById('edit-ad-provider');
-        const customFields = document.getElementById('custom-ad-fields');
-        const externalFields = document.getElementById('external-ad-fields');
-        
-        providerSelect.addEventListener('change', () => {
-          const provider = providerSelect.value;
-          
-          if (provider === 'custom') {
-            customFields.style.display = 'block';
-            externalFields.style.display = 'none';
-          } else {
-            customFields.style.display = 'none';
-            externalFields.style.display = 'block';
-          }
-        });
-        
-        // Handle file type changes
-        const typeSelect = document.getElementById('edit-ad-type');
-        const fileInput = document.getElementById('edit-ad-file');
-        
-        typeSelect.addEventListener('change', () => {
-          fileInput.accept = typeSelect.value === 'video' ? 'video/*' : 'image/*';
-        });
-        
-        const form = document.getElementById('edit-ad-form');
-        form.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          
-          const provider = document.getElementById('edit-ad-provider').value;
-          const isCustomAd = provider === 'custom';
-          
-          // Base update data
-          const updatedAd = {
-            name: document.getElementById('edit-ad-name').value,
-            provider: provider,
-            placement: document.getElementById('edit-ad-placement').value,
-            active: document.getElementById('edit-ad-active').checked
-          };
-          
-          // Add provider-specific data
-          if (isCustomAd) {
-            updatedAd.type = document.getElementById('edit-ad-type').value;
-            updatedAd.duration = parseInt(document.getElementById('edit-ad-duration').value) || 30;
-            updatedAd.size = document.getElementById('edit-ad-size').value;
-            // Don't clear ad_code if it was already present and external provider before
-            if (provider !== data.provider) {
-              updatedAd.ad_code = null;
-            }
-          } else {
-            updatedAd.ad_code = document.getElementById('edit-ad-code').value;
-            updatedAd.type = 'external';
-            // Keep file_url even when switching to external ads
-          }
-          
-          try {
-            // Handle file upload if there's a new file
-            const fileInput = document.getElementById('edit-ad-file');
-            if (fileInput.files.length > 0 && isCustomAd) {
-              const file = fileInput.files[0];
-              const fileExt = file.name.split('.').pop();
-              const fileName = `ad_${adId}_${Date.now()}.${fileExt}`;
-              
-              // Upload file to Supabase storage
-              const { data: fileData, error: fileError } = await supabase.storage
-                .from('ad_files')
-                .upload(fileName, file, {
-                  cacheControl: '3600',
-                  upsert: true
-                });
-              
-              if (fileError) throw fileError;
-              
-              // Get public URL
-              const { data: urlData } = await supabase.storage
-                .from('ad_files')
-                .getPublicUrl(fileName);
-              
-              updatedAd.file_url = urlData.publicUrl;
-            }
-            
-            // Update ad in database
-            const { error } = await supabase
-              .from('ads')
-              .update(updatedAd)
-              .eq('id', adId);
-            
-            if (error) throw error;
-            
-            alert('Ad updated successfully');
-            editAdModal.remove();
-            loadAds();  // Refresh ads list
-            
-          } catch (error) {
-            alert(`Failed to update ad: ${error.message}`);
-          }
-        });
-      })
-      .catch(err => {
-        console.error('Error in edit ad:', err);
-        alert('Error loading ad data. Please try again.');
-      });
-  });
+    // Ad system removed
 }
 
 // Toggle ad status
 async function toggleAd(adId, isActive) {
   return secureAdminFunction(async () => {
     try {
-      const { error } = await supabase
+      const sb = window.sb;
+      const { error } = await sb
         .from('ads')
         .update({ active: !isActive })
         .eq('id', adId);
@@ -1297,27 +881,7 @@ async function toggleAd(adId, isActive) {
 
 // Delete ad
 async function deleteAd(adId) {
-  return secureAdminFunction(async () => {
-    if (!confirm('Are you sure you want to delete this ad? This action cannot be undone.')) {
-      return;
-    }
-    
-    try {
-      const { error } = await supabase
-        .from('ads')
-        .delete()
-        .eq('id', adId);
-      
-      if (error) throw error;
-      
-      alert('Ad deleted successfully');
-      loadAds();
-      
-    } catch (error) {
-      console.error('Error deleting ad:', error);
-      alert(`Failed to delete ad: ${error.message}`);
-    }
-  });
+    // Ad system removed
 }
 
 // Show placement manager modal
@@ -1396,7 +960,8 @@ async function showPlacementManagerModal() {
       const description = document.getElementById('placement-description').value;
       
       try {
-        const { error } = await supabase
+        const sb = window.sb;
+        const { error } = await sb
           .from('ad_placements')
           .insert([{ name, placement_key: key, description }]);
         
@@ -1423,19 +988,20 @@ async function loadPlacements() {
   if (!tableBody) return;
   
   try {
+    const sb = window.sb;
     // First check if the table exists
-    const { data: tableInfo, error: tableError } = await supabase
+    const { data: tableInfo, error: tableError } = await sb
       .from('ad_placements')
       .select('*', { count: 'exact', head: true });
     
     if (tableError && tableError.code === 'PGRST116') {
       // Table doesn't exist, create it
-      await supabase.rpc('create_ad_placements_table');
+      await sb.rpc('create_ad_placements_table');
       tableBody.innerHTML = '<tr><td colspan="4" class="text-center">Creating placements table. Please try again.</td></tr>';
       return;
     }
     
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('ad_placements')
       .select('*')
       .order('name');
@@ -1498,7 +1064,8 @@ async function loadPlacements() {
 async function editPlacement(id) {
   return secureAdminFunction(async () => {
     try {
-      const { data, error } = await supabase
+      const sb = window.sb;
+      const { data, error } = await sb
         .from('ad_placements')
         .select('*')
         .eq('id', id)
@@ -1554,7 +1121,7 @@ async function editPlacement(id) {
         const description = document.getElementById('edit-placement-description').value;
         
         try {
-          const { error } = await supabase
+          const { error } = await sb
             .from('ad_placements')
             .update({ name, description })
             .eq('id', id);
@@ -1585,7 +1152,8 @@ async function deletePlacement(id) {
     }
     
     try {
-      const { error } = await supabase
+      const sb = window.sb;
+      const { error } = await sb
         .from('ad_placements')
         .delete()
         .eq('id', id);
@@ -1646,11 +1214,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   
-  // Add new ad button
-  document.getElementById('add-ad-button').addEventListener('click', () => {
-    showAddAdModal();
-  });
-  
   // Settings form
   settingsForm.addEventListener('submit', saveSettings);
   
@@ -1705,22 +1268,6 @@ document.addEventListener('DOMContentLoaded', () => {
     exportScanButton.addEventListener('click', generateScanReport);
   }
   
-  // Add placement manager button to ads tab
-  const adsTabContent = document.getElementById('ads-tab');
-  if (adsTabContent) {
-    const adControls = adsTabContent.querySelector('.ad-controls');
-    if (adControls) {
-      const placementManagerBtn = document.createElement('button');
-      placementManagerBtn.id = 'placement-manager-button';
-      placementManagerBtn.className = 'secondary-button';
-      placementManagerBtn.innerHTML = '<i class="fas fa-sitemap"></i> Manage Placements';
-      placementManagerBtn.style.marginRight = '0.5rem';
-      
-      adControls.prepend(placementManagerBtn);
-      
-      placementManagerBtn.addEventListener('click', showPlacementManagerModal);
-    }
-  }
 });
 
 // Search users
@@ -1732,7 +1279,8 @@ async function searchUsers(searchTerm) {
   }
   
   try {
-    const { data, error } = await supabase
+    const sb = window.sb;
+    const { data, error } = await sb
       .from('profiles')
       .select('*')
       .or(`full_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`);
@@ -1757,8 +1305,9 @@ async function searchUsers(searchTerm) {
 // Generate and download user report
 async function generateUserReport() {
   try {
+    const sb = window.sb;
     // Get all users
-    supabase
+    sb
       .from('profiles')
       .select('*')
       .order('created_at', { ascending: false })
@@ -1802,8 +1351,9 @@ async function generateUserReport() {
 // Generate and download scan report
 async function generateScanReport() {
   try {
+    const sb = window.sb;
     // Get all scans
-    supabase
+    sb
       .from('scan_history')
       .select('*, profiles(email, full_name)')
       .order('created_at', { ascending: false })
@@ -1855,7 +1405,8 @@ async function resetAllUserScans() {
   }
   
   try {
-    const { error } = await supabase
+    const sb = window.sb;
+    const { error } = await sb
       .from('profiles')
       .update({ 
         scans_remaining: 5,
@@ -1936,7 +1487,8 @@ async function sendMassNotification() {
 async function loadSettings() {
   return secureAdminFunction(async () => {
     try {
-      const { data, error } = await supabase
+      const sb = window.sb;
+      const { data, error } = await sb
         .from('system_settings')
         .select('*')
         .single();
@@ -1944,9 +1496,8 @@ async function loadSettings() {
       if (error && error.code !== 'PGRST116') throw error;
       
       if (data) {
-        document.getElementById('free-scans').value = data.free_scans_per_day;
-        document.getElementById('ad-duration').value = data.ad_unlock_hours;
-        document.getElementById('enable-ads').checked = data.ads_enabled;
+        const freeScansInput = document.getElementById('free-scans');
+        if (freeScansInput) freeScansInput.value = data.free_scans_per_day;
         document.getElementById('enable-registration').checked = data.registration_enabled;
       }
       
@@ -1961,16 +1512,16 @@ async function loadSettings() {
 async function saveSettings(e) {
   e.preventDefault();
   
+  const freeScansInput = document.getElementById('free-scans');
   const settings = {
-    free_scans_per_day: parseInt(document.getElementById('free-scans').value),
-    ad_unlock_hours: parseInt(document.getElementById('ad-duration').value),
-    ads_enabled: document.getElementById('enable-ads').checked,
+    free_scans_per_day: freeScansInput ? parseInt(freeScansInput.value) : 999999,
     registration_enabled: document.getElementById('enable-registration').checked
   };
   
   try {
+    const sb = window.sb;
     // Check if settings exist
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('system_settings')
       .select('id')
       .single();
@@ -1981,13 +1532,13 @@ async function saveSettings(e) {
     
     if (data) {
       // Update existing settings
-      result = await supabase
+      result = await sb
         .from('system_settings')
         .update(settings)
         .eq('id', data.id);
     } else {
       // Insert new settings
-      result = await supabase
+      result = await sb
         .from('system_settings')
         .insert([{ ...settings, id: 1 }]);
     }
@@ -2007,7 +1558,5 @@ window.admin = {
   showAdminDashboard,
   loadUsers,
   loadAnalytics,
-  loadAds,
-  loadSettings,
-  createAdWatchedChart
+  loadSettings
 };
