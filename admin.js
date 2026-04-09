@@ -25,7 +25,7 @@ async function verifyAdminPermissions() {
     const userProfileData = window.auth.userProfile();
     if (!userProfileData || !userProfileData.is_admin) return false;
     
-    const sb = window.supabase_client;
+    const sb = window.sb;
 
     // Double check with server using RPC for extra security
     const { data, error } = await sb.rpc('verify_admin_permissions', {
@@ -87,7 +87,7 @@ async function showAdminDashboard() {
 async function loadUsers() {
   return secureAdminFunction(async () => {
     try {
-      const sb = window.supabase_client;
+      const sb = window.sb;
       // Get count for pagination
       const { count, error: countError } = await sb
         .from('profiles')
@@ -179,7 +179,7 @@ async function editUser(userId) {
     editUserModal.className = 'modal';
     editUserModal.id = 'edit-user-modal';
     
-    const sb = window.supabase_client;
+    const sb = window.sb;
 
     // Fetch user data
     sb
@@ -284,7 +284,7 @@ async function deleteUser(userId) {
       return;
     }
     
-    const sb = window.supabase_client;
+    const sb = window.sb;
 
     try {
       // First delete all data related to the user
@@ -325,7 +325,7 @@ async function deleteUser(userId) {
 async function loadAnalytics() {
   return secureAdminFunction(async () => {
     try {
-      const sb = window.supabase_client;
+      const sb = window.sb;
       // Get total users count
       const { count: userCount, error: userCountError } = await sb
         .from('profiles')
@@ -360,7 +360,7 @@ async function loadAnalytics() {
 // Create user growth chart
 async function createUserChart() {
   try {
-    const sb = window.supabase_client;
+    const sb = window.sb;
     // Get user signups by date for the last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -458,7 +458,7 @@ async function createUserChart() {
 // Create scans chart
 async function createScansChart() {
   try {
-    const sb = window.supabase_client;
+    const sb = window.sb;
     // Get scan counts by date for the last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -591,7 +591,7 @@ async function loadAds() {
 async function showAddAdModal() {
   return secureAdminFunction(async () => {
     try {
-      const sb = window.supabase_client;
+      const sb = window.sb;
       // First check if ads table is properly structured
       const { error: tableCheckError } = await sb
         .from('ads')
@@ -861,7 +861,7 @@ async function editAd(adId) {
 async function toggleAd(adId, isActive) {
   return secureAdminFunction(async () => {
     try {
-      const sb = window.supabase_client;
+      const sb = window.sb;
       const { error } = await sb
         .from('ads')
         .update({ active: !isActive })
@@ -960,7 +960,7 @@ async function showPlacementManagerModal() {
       const description = document.getElementById('placement-description').value;
       
       try {
-        const sb = window.supabase_client;
+        const sb = window.sb;
         const { error } = await sb
           .from('ad_placements')
           .insert([{ name, placement_key: key, description }]);
@@ -988,7 +988,7 @@ async function loadPlacements() {
   if (!tableBody) return;
   
   try {
-    const sb = window.supabase_client;
+    const sb = window.sb;
     // First check if the table exists
     const { data: tableInfo, error: tableError } = await sb
       .from('ad_placements')
@@ -1064,7 +1064,7 @@ async function loadPlacements() {
 async function editPlacement(id) {
   return secureAdminFunction(async () => {
     try {
-      const sb = window.supabase_client;
+      const sb = window.sb;
       const { data, error } = await sb
         .from('ad_placements')
         .select('*')
@@ -1152,7 +1152,7 @@ async function deletePlacement(id) {
     }
     
     try {
-      const sb = window.supabase_client;
+      const sb = window.sb;
       const { error } = await sb
         .from('ad_placements')
         .delete()
@@ -1279,7 +1279,7 @@ async function searchUsers(searchTerm) {
   }
   
   try {
-    const sb = window.supabase_client;
+    const sb = window.sb;
     const { data, error } = await sb
       .from('profiles')
       .select('*')
@@ -1305,7 +1305,7 @@ async function searchUsers(searchTerm) {
 // Generate and download user report
 async function generateUserReport() {
   try {
-    const sb = window.supabase_client;
+    const sb = window.sb;
     // Get all users
     sb
       .from('profiles')
@@ -1351,7 +1351,7 @@ async function generateUserReport() {
 // Generate and download scan report
 async function generateScanReport() {
   try {
-    const sb = window.supabase_client;
+    const sb = window.sb;
     // Get all scans
     sb
       .from('scan_history')
@@ -1405,7 +1405,7 @@ async function resetAllUserScans() {
   }
   
   try {
-    const sb = window.supabase_client;
+    const sb = window.sb;
     const { error } = await sb
       .from('profiles')
       .update({ 
@@ -1487,7 +1487,7 @@ async function sendMassNotification() {
 async function loadSettings() {
   return secureAdminFunction(async () => {
     try {
-      const sb = window.supabase_client;
+      const sb = window.sb;
       const { data, error } = await sb
         .from('system_settings')
         .select('*')
@@ -1519,7 +1519,7 @@ async function saveSettings(e) {
   };
   
   try {
-    const sb = window.supabase_client;
+    const sb = window.sb;
     // Check if settings exist
     const { data, error } = await sb
       .from('system_settings')

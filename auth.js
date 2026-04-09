@@ -1,837 +1,222 @@
-// Supabase initialization
+// Supabase initialization for CalcuBite AI
 const supabaseUrl = 'https://msooyauwfmzfrvsdzxhn.supabase.co';
 const supabaseKey = 'sb_publishable_Mmk7EBnekxE4treg8XKHZg_ld7NGC5M';
-// Initialize Supabase client
-// Note: library exposes 'window.supabase' as the entry point.
-// We use 'supabase_client' as our internal instance.
-const supabase_client = window.supabase.createClient(supabaseUrl, supabaseKey);
-window.supabase_client = supabase_client;
-
-// DOM elements
-const authContainer = document.getElementById('auth-container');
-const appContainer = document.getElementById('app-container');
-const loginTemplate = document.getElementById('login-template');
-const registerTemplate = document.getElementById('register-template');
-const resetPasswordTemplate = document.getElementById('reset-password-template');
-const userProfileElem = document.getElementById('user-profile');
-const userNameElem = document.getElementById('user-name');
-const userAvatarElem = document.getElementById('user-avatar');
-const adminLinkElem = document.getElementById('admin-link');
+const sb = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 // Global user state
 let currentUser = null;
 let userProfile = null;
 
-// Initialize window.auth early with basic getters
-window.auth = {
-  currentUser: () => currentUser,
-  userProfile: () => userProfile,
-  isPremium: () => true,
-  getNutritionalGoals: () => userProfile?.nutritional_goals || {
-    calories: 2000,
-    protein: 50,
-    carbs: 275,
-    fat: 78,
-    sugar: 50,
-    sodium: 2300
-  }
-};
+// DOM elements
+let authContainer, appContainer, loginTemplate, registerTemplate;
+let userNameElem, userAvatarElem, adminLinkElem;
 
-async function calculateNutritionalGoals(profile) {
-    const prompt = `Based on the following user profile, calculate daily nutritional limits:
-Gender: ${profile.gender}
-Age: ${profile.age}
-Weight: ${profile.weight_kg}kg
-Height: ${profile.height_cm}cm
-Activity Level: ${profile.activity_level}
+const usernameToEmail = (username) => `${username.trim().toLowerCase()}@nutriscanai-internal.com`;
 
-Provide a JSON object with these keys: calories, protein (g), carbs (g), fat (g), sugar (g), sodium (mg).
-Respond ONLY with the JSON object.`;
+function extractJSON(text) {
+  try {
+    const s = text.indexOf('{'), e = text.lastIndexOf('}');
+    if (s !== -1 && e !== -1) return JSON.parse(text.substring(s, e + 1));
+    return JSON.parse(text);
+  } catch (e) { return {}; }
+}
+window.extractJSON = extractJSON;
 
-    const response = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer sk_ZDnV9hilntSLCLGEmJKPxavBNJaPLI4K'
-        },
-        body: JSON.stringify({
-            model: "claude-fast",
-            messages: [{ role: "user", content: prompt }],
-            response_format: { type: "json_object" }
-        })
+document.addEventListener('DOMContentLoaded', () => {
+    authContainer = document.getElementById('auth-container');
+    appContainer = document.getElementById('app-container');
+    loginTemplate = document.getElementById('login-template');
+    registerTemplate = document.getElementById('register-template');
+    userNameElem = document.getElementById('user-name');
+    userAvatarElem = document.getElementById('user-avatar');
+    adminLinkElem = document.getElementById('admin-link');
+
+    checkAuth();
+
+    document.getElementById('logout-link')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        handleLogout();
     });
 
-    if (!response.ok) throw new Error("AI calculation failed");
-    const data = await response.json();
-    const content = data.choices[0].message.content;
+    document.getElementById('profile-link')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        showProfileModal();
+    });
+});
 
-    // Improved JSON extraction
-    try {
-      const firstBracket = content.indexOf('{');
-      const lastBracket = content.lastIndexOf('}');
-      if (firstBracket !== -1 && lastBracket !== -1) {
-        return JSON.parse(content.substring(firstBracket, lastBracket + 1));
-      }
-      return JSON.parse(content);
-    } catch (e) {
-      console.error("AI Goal Parsing Failed. Raw content:", content);
-      throw new Error("AI output was not valid JSON");
-    }
-}
-
-// Authentication state
 async function checkAuth() {
-  const { data, error } = await supabase_client.auth.getSession();
-  
-  if (error) {
-    console.error('Error checking authentication:', error);
-    showLandingPage();
-    return false;
-  }
-  
-  if (data.session) {
+  const { data } = await sb.auth.getSession();
+  if (data?.session) {
     currentUser = data.session.user;
     await fetchUserProfile();
     updateUIForUser();
     return true;
-  } else {
-    showLandingPage();
-    return false;
   }
+  showLandingPage();
+  return false;
 }
 
-// Fetch user profile data
 async function fetchUserProfile() {
   if (!currentUser) return;
-  
-  const { data, error } = await supabase_client
-    .from('profiles')
-    .select('*')
-    .eq('id', currentUser.id)
-    .single();
-  
-  if (error) {
-    console.error('Error fetching user profile:', error);
-    
-    // If profile doesn't exist, create it
-    if (error.code === 'PGRST116') {
+  const { data, error } = await sb.from('profiles').select('*').eq('id', currentUser.id).single();
+  if (error && error.code === 'PGRST116') {
       await createUserProfile();
-    }
-    return;
+  } else {
+      userProfile = data;
   }
-  
-  userProfile = data;
 }
 
-// Create new user profile
 async function createUserProfile() {
   if (!currentUser) return null;
-  
-  try {
-    const { data, error } = await supabase_client
-      .from('profiles')
-      .insert([{
-        id: currentUser.id,
-        full_name: currentUser.user_metadata?.full_name || 'User',
-        avatar_url: currentUser.user_metadata?.avatar_url || null,
-        email: currentUser.email,
-        is_admin: false,
-        scans_remaining: 5,
-        last_scan_reset: new Date().toISOString(),
-        nutritional_goals: {
-            calories: 2000,
-            protein: 50,
-            carbs: 275,
-            fat: 78,
-            sugar: 50,
-            sodium: 2300
-        }
-      }])
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating user profile:', error);
-      return null;
-    }
-    
-    userProfile = data;
-    return data;
-  } catch (err) {
-    console.error('Exception creating user profile:', err);
-    return null;
-  }
+  const { data } = await sb.from('profiles').insert([{
+      id: currentUser.id,
+      full_name: currentUser.user_metadata?.full_name || 'User',
+      email: currentUser.email,
+      nutritional_goals: { calories: 2000, protein: 50, carbs: 275, fat: 78, sugar: 50, sodium: 2300 }
+  }]).select().single();
+  userProfile = data;
+  return data;
 }
 
-// Update UI for authenticated user
 function updateUIForUser() {
-  // Hide landing page if visible
-  const landingPage = document.getElementById('landing-page');
-  if (landingPage) {
-    landingPage.style.display = 'none';
-  }
+  const lp = document.getElementById('landing-page');
+  if (lp) lp.style.display = 'none';
   document.body.classList.remove('landing-mode');
+  if (authContainer) authContainer.style.display = 'none';
+  if (appContainer) appContainer.style.display = 'block';
   
-  // Show app container, hide auth container
-  authContainer.style.display = 'none';
-  appContainer.style.display = 'block';
-  
-  // Update user info in UI
-  userNameElem.textContent = userProfile?.full_name || currentUser.email.split('@')[0];
-  
-  if (userProfile?.avatar_url) {
-    userAvatarElem.src = userProfile.avatar_url;
-  } else {
-    userAvatarElem.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userNameElem.textContent)}&background=random`;
-  }
-  
-  // Show admin link if user is admin but don't rely only on frontend permission
-  if (adminLinkElem) {
-    if (userProfile?.is_admin) {
-      adminLinkElem.style.display = 'flex';
-    } else {
-      adminLinkElem.style.display = 'none';
-    }
-  }
-  
+  if (userNameElem) userNameElem.textContent = userProfile?.full_name || currentUser.email.split('@')[0];
+  if (userAvatarElem) userAvatarElem.src = userProfile?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(userNameElem.textContent)}&background=random`;
+  if (adminLinkElem) adminLinkElem.style.display = userProfile?.is_admin ? 'flex' : 'none';
 }
 
-// Show the landing page
 function showLandingPage() {
-  const landingPage = document.getElementById('landing-page');
-  const appContainer = document.getElementById('app-container');
-  const authContainer = document.getElementById('auth-container');
-  
-  if (landingPage) {
-    landingPage.style.display = 'block';
-    appContainer.style.display = 'none';
-    authContainer.style.display = 'none';
+  const lp = document.getElementById('landing-page');
+  if (lp) {
+    lp.style.display = 'block';
+    if (appContainer) appContainer.style.display = 'none';
+    if (authContainer) authContainer.style.display = 'none';
     document.body.classList.add('landing-mode');
   } else {
     showLoginForm();
   }
 }
 
-// Show the login form
 function showLoginForm() {
-  const landingPage = document.getElementById('landing-page');
-  if (landingPage) {
-    landingPage.style.display = 'none';
-  }
-  
+  if (!authContainer) return;
   authContainer.style.display = 'flex';
-  appContainer.style.display = 'none';
-  document.body.classList.remove('landing-mode');
-  
-  // Clone template content
-  const template = document.getElementById('login-template');
-  if (!template) {
-    console.error('Login template not found');
-    return;
-  }
-  
-  const content = document.importNode(template.content, true);
+  if (appContainer) appContainer.style.display = 'none';
   authContainer.innerHTML = '';
-  authContainer.appendChild(content);
-  
-  // Add event listeners
-  const loginForm = document.getElementById('login-form');
-  const registerLink = document.getElementById('register-link');
-  const forgotPasswordLink = document.getElementById('forgot-password-link');
-  if (loginForm) loginForm.addEventListener('submit', handleLogin);
-  if (registerLink) registerLink.addEventListener('click', showRegisterForm);
-  if (forgotPasswordLink) forgotPasswordLink.addEventListener('click', showResetPasswordForm);
-  
-  // Password visibility toggle
-  const togglePassword = document.querySelector('.toggle-password');
-  const passwordInput = document.getElementById('login-password');
-  
-  if (togglePassword && passwordInput) {
-    togglePassword.addEventListener('click', () => {
-      const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-      passwordInput.setAttribute('type', type);
-      togglePassword.classList.toggle('fa-eye');
-      togglePassword.classList.toggle('fa-eye-slash');
-    });
-  }
+  authContainer.appendChild(document.importNode(loginTemplate.content, true));
+  document.getElementById('login-form').addEventListener('submit', handleLogin);
+  document.getElementById('register-link').addEventListener('click', showRegisterForm);
 }
 
-// Show the register form
 function showRegisterForm(e) {
-  if (e) e.preventDefault();
-  
-  const landingPage = document.getElementById('landing-page');
-  if (landingPage) {
-    landingPage.style.display = 'none';
-  }
-  
+  e?.preventDefault();
+  if (!authContainer) return;
   authContainer.style.display = 'flex';
-  appContainer.style.display = 'none';
-  document.body.classList.remove('landing-mode');
-  
-  // Clone template content
-  const content = document.importNode(registerTemplate.content, true);
   authContainer.innerHTML = '';
-  authContainer.appendChild(content);
-  
-  // Add event listeners
+  authContainer.appendChild(document.importNode(registerTemplate.content, true));
   document.getElementById('register-form').addEventListener('submit', handleRegister);
   document.getElementById('login-link').addEventListener('click', showLoginForm);
-  
-  // Password visibility toggle
-  const togglePassword = document.querySelector('.toggle-password');
-  const passwordInput = document.getElementById('register-password');
-  
-  togglePassword.addEventListener('click', () => {
-    const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-    passwordInput.setAttribute('type', type);
-    togglePassword.classList.toggle('fa-eye');
-    togglePassword.classList.toggle('fa-eye-slash');
-  });
-  
-  // Password strength meter
-  const strengthBar = document.getElementById('strength-bar');
-  const strengthText = document.getElementById('strength-text');
-  
-  passwordInput.addEventListener('input', () => {
-    const password = passwordInput.value;
-    const strength = calculatePasswordStrength(password);
-    
-    strengthBar.style.width = `${strength.score * 25}%`;
-    strengthBar.style.backgroundColor = strength.color;
-    strengthText.textContent = strength.label;
-    strengthText.style.color = strength.color;
-  });
 }
 
-// Show the reset password form
-function showResetPasswordForm(e) {
-  if (e) e.preventDefault();
-  
-  // Clone template content
-  const content = document.importNode(resetPasswordTemplate.content, true);
-  authContainer.innerHTML = '';
-  authContainer.appendChild(content);
-  
-  // Add event listeners
-  document.getElementById('reset-form').addEventListener('submit', handleResetPassword);
-  document.getElementById('back-to-login-link').addEventListener('click', showLoginForm);
-}
-
-// Helper to convert username to internal email
-const usernameToEmail = (username) => `${username.trim().toLowerCase()}@nutriscanai-internal.com`;
-
-// Handle login form submission
 async function handleLogin(e) {
   e.preventDefault();
-  
   const username = document.getElementById('login-username').value;
   const password = document.getElementById('login-password').value;
-  const rememberMe = document.getElementById('remember-me').checked;
-  const errorElement = document.getElementById('login-error');
-  
   try {
-    const { data, error } = await supabase_client.auth.signInWithPassword({
-      email: usernameToEmail(username),
-      password,
-      options: {
-        persistSession: rememberMe
-      }
-    });
-    
+    const { data, error } = await sb.auth.signInWithPassword({ email: usernameToEmail(username), password });
     if (error) throw error;
-    
     currentUser = data.user;
     await fetchUserProfile();
     updateUIForUser();
-    
-  } catch (error) {
-    errorElement.style.display = 'block';
-    errorElement.textContent = error.message || 'Failed to login. Please try again.';
+  } catch (err) {
+    const errEl = document.getElementById('login-error');
+    if (errEl) { errEl.style.display = 'block'; errEl.textContent = err.message; }
   }
 }
 
-// Handle register form submission
 async function handleRegister(e) {
   e.preventDefault();
-  
   const username = document.getElementById('register-username').value;
   const password = document.getElementById('register-password').value;
-  const termsAgreed = document.getElementById('terms-agree').checked;
-  const errorElement = document.getElementById('register-error');
-  
-  if (!termsAgreed) {
-    errorElement.style.display = 'block';
-    errorElement.textContent = 'You must agree to the Terms of Service and Privacy Policy.';
-    return;
-  }
-  
+  const terms = document.getElementById('terms-agree').checked;
+  if (!terms) { alert('Please agree to terms.'); return; }
   const email = usernameToEmail(username);
-
   try {
-    const { data, error } = await supabase_client.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: username
-        }
-      }
-    });
-    
+    const { data, error } = await sb.auth.signUp({ email, password, options: { data: { full_name: username } } });
     if (error) throw error;
-    
-    // Auto-login or redirect to login after signup
     if (data.session) {
-        currentUser = data.user;
-        await fetchUserProfile();
-        updateUIForUser();
+      currentUser = data.user; await fetchUserProfile(); updateUIForUser();
     } else {
-        // Try logging in immediately
-        try {
-            const loginRes = await supabase_client.auth.signInWithPassword({ email, password });
-            if (!loginRes.error) {
-                currentUser = loginRes.data.user;
-                await fetchUserProfile();
-                updateUIForUser();
-                return;
-            }
-        } catch(err) {}
-
-        errorElement.style.display = 'block';
-        errorElement.textContent = 'Registration successful! You can now login.';
-        errorElement.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
-        errorElement.style.color = 'var(--success)';
-
-        setTimeout(() => {
-          showLoginForm();
-        }, 2000);
+      const loginRes = await sb.auth.signInWithPassword({ email, password });
+      if (!loginRes.error) {
+        currentUser = loginRes.data.user; await fetchUserProfile(); updateUIForUser();
+      } else {
+        alert('Success! Please login.'); showLoginForm();
+      }
     }
-    
-  } catch (error) {
-    errorElement.style.display = 'block';
-    errorElement.textContent = error.message || 'Failed to register. Please try again.';
-  }
+  } catch (err) { alert(err.message); }
 }
 
-// Handle password reset request
-async function handleResetPassword(e) {
-  e.preventDefault();
-  
-  const email = document.getElementById('reset-email').value;
-  const errorElement = document.getElementById('reset-error');
-  const successElement = document.getElementById('reset-success');
-  
-  try {
-    const { error } = await supabase_client.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}`,
-    });
-    
-    if (error) throw error;
-    
-    // Show success message
-    if (successElement) {  
-      successElement.style.display = 'block';
-      successElement.textContent = 'Password reset link sent! Please check your email.';
-    }
-    
-  } catch (error) {
-    if (errorElement) {  
-      errorElement.style.display = 'block';
-      errorElement.textContent = error.message || 'Failed to send reset link. Please try again.';
-    }
-  }
-}
-
-// Handle logout
 async function handleLogout() {
-  try {
-    await supabase_client.auth.signOut();
-    currentUser = null;
-    userProfile = null;
-    showLoginForm();
-  } catch (error) {
-    console.error('Logout error:', error);
-    alert('Failed to logout. Please try again.');
-  }
+  await sb.auth.signOut();
+  currentUser = null; userProfile = null;
+  showLandingPage();
 }
 
-// Calculate password strength
-function calculatePasswordStrength(password) {
-  if (!password) {
-    return { score: 0, label: 'Password strength', color: 'var(--text-tertiary)' };
-  }
-  
-  let score = 0;
-  
-  // Length check
-  if (password.length > 6) score += 1;
-  if (password.length > 10) score += 1;
-  
-  // Complexity checks
-  if (/[A-Z]/.test(password)) score += 1;
-  if (/[0-9]/.test(password)) score += 1;
-  if (/[^A-Za-z0-9]/.test(password)) score += 1;
-  
-  // Determine label and color
-  let label, color;
-  
-  switch (score) {
-    case 0:
-    case 1:
-      label = 'Weak';
-      color = 'var(--danger)';
-      break;
-    case 2:
-    case 3:
-      label = 'Medium';
-      color = 'var(--warning)';
-      break;
-    case 4:
-      label = 'Strong';
-      color = 'var(--success)';
-      break;
-    case 5:
-      label = 'Very Strong';
-      color = 'var(--success)';
-      break;
-  }
-  
-  return { score: score, label, color };
-}
-
-// Update scans remaining for user
-async function updateScansRemaining(scansUsed = 1) {
-  return true; // Unlimited for everyone
-}
-
-// Reset daily scan count
-async function resetDailyScanCount() {
-  // Not needed when unlimited
-}
-
-// Update user profile
-async function updateProfile(profileData) {
-  if (!currentUser) return;
-  
-  const { error } = await supabase_client
-    .from('profiles')
-    .update(profileData)
-    .eq('id', currentUser.id);
-  
-  if (error) {
-    console.error('Error updating profile:', error);
-    return false;
-  }
-  
-  // Update local user profile data
-  userProfile = { ...userProfile, ...profileData };
+async function updateProfile(data) {
+  if (!currentUser) return false;
+  const { error } = await sb.from('profiles').update(data).eq('id', currentUser.id);
+  if (error) return false;
+  userProfile = { ...userProfile, ...data };
   updateUIForUser();
-  
   return true;
 }
 
-// Show profile modal
 function showProfileModal() {
-  const profileModal = document.getElementById('profile-modal');
-  if (!profileModal) {
-    console.error('Profile modal element not found');
-    return;
-  }
-  
-  try {
-    // Ensure the user profile data is loaded before proceeding
-    if (!userProfile) {
-      fetchUserProfile().then(() => {
-        if (userProfile) {
-          try {
-            populateProfileModal();
-            profileModal.style.display = 'block';
-          } catch (populateErr) {
-            console.error('Error populating profile modal:', populateErr);
-            alert('Error showing profile: ' + populateErr.message);
-          }
-        } else {
-          console.error('Failed to load user profile');
-          alert('Unable to load profile data. Please try again.');
-        }
-      }).catch(error => {
-        console.error('Error fetching profile data:', error);
-        alert('Unable to load profile data. Please try again.');
-      });
-    } else {
-      populateProfileModal();
-      profileModal.style.display = 'block';
-    }
-  } catch (err) {
-    console.error('Error in showProfileModal:', err);
-    alert('Error opening profile: ' + err.message);
-  }
-}
-
-// Helper function to populate profile modal with data
-function populateProfileModal() {
-  const nameInput = document.getElementById('profile-name');
-  const genderInput = document.getElementById('profile-gender');
-  const ageInput = document.getElementById('profile-age');
-  const weightInput = document.getElementById('profile-weight');
-  const heightInput = document.getElementById('profile-height');
-  const activityInput = document.getElementById('profile-activity');
-  const emailInput = document.getElementById('profile-email');
-  const avatarImg = document.getElementById('profile-avatar-img');
-  const personalizationStatus = document.getElementById('personalization-status');
-  
-  // Check if essential elements exist before proceeding
-  if (!nameInput || !emailInput) {
-    console.error('Essential profile elements not found');
-    return;
-  }
-  
-  // Fill profile data
-  nameInput.value = userProfile?.full_name || '';
-  if (genderInput) genderInput.value = userProfile?.gender || '';
-  if (ageInput) ageInput.value = userProfile?.age || '';
-  if (weightInput) weightInput.value = userProfile?.weight_kg || '';
-  if (heightInput) heightInput.value = userProfile?.height_cm || '';
-  if (activityInput) activityInput.value = userProfile?.activity_level || 'sedentary';
-  emailInput.value = currentUser?.email || '';
-  
-  if (userProfile?.avatar_url) {
-    avatarImg.src = userProfile.avatar_url;
-  } else {
-    avatarImg.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(nameInput.value)}&background=random`;
-  }
-
-  if (userProfile?.gender && userProfile?.age && personalizationStatus) {
-    personalizationStatus.style.display = 'flex';
-    personalizationStatus.innerHTML = '<i class="fas fa-magic"></i> AI Personalization active: Daily limits calculated';
-  } else if (personalizationStatus) {
-    personalizationStatus.style.display = 'flex';
-    personalizationStatus.style.backgroundColor = 'rgba(79, 70, 229, 0.1)';
-    personalizationStatus.style.color = 'var(--primary)';
-    personalizationStatus.innerHTML = '<i class="fas fa-info-circle"></i> Fill your profile to enable AI personalized daily limits';
-  }
-
-  // Handle plan-related display (legacy support for unified experience)
-  const proBadge = document.getElementById('pro-plan-badge');
-  const freeBadge = document.getElementById('free-plan-badge');
-  if (proBadge) proBadge.style.display = 'inline-block';
-  if (freeBadge) freeBadge.style.display = 'none';
-  const profileForm = document.getElementById('profile-form');
-  if (profileForm) {
-    profileForm.onsubmit = async (e) => {
+  const modal = document.getElementById('profile-modal');
+  if (!modal) return;
+  if (userProfile) {
+    document.getElementById('profile-name').value = userProfile.full_name || '';
+    document.getElementById('profile-form').onsubmit = async (e) => {
       e.preventDefault();
-      
       const updateData = {
-        full_name: nameInput.value.trim(),
-        gender: genderInput.value,
-        age: parseInt(ageInput.value),
-        weight_kg: parseFloat(weightInput.value),
-        height_cm: parseFloat(heightInput.value),
-        activity_level: activityInput.value
+        full_name: document.getElementById('profile-name').value.trim(),
+        gender: document.getElementById('profile-gender')?.value,
+        age: parseInt(document.getElementById('profile-age')?.value),
+        weight_kg: parseFloat(document.getElementById('profile-weight')?.value),
+        height_cm: parseFloat(document.getElementById('profile-height')?.value)
       };
-      
-      const newPassword = document.getElementById('profile-password')?.value.trim() || '';
-      
-      // AI Personalization check: if profile details changed, recalculate limits
-      const profileChanged =
-        updateData.gender !== userProfile?.gender ||
-        updateData.age !== userProfile?.age ||
-        updateData.weight_kg !== userProfile?.weight_kg ||
-        updateData.height_cm !== userProfile?.height_cm ||
-        updateData.activity_level !== userProfile?.activity_level;
-
-      if (profileChanged) {
-        try {
-            const goals = await calculateNutritionalGoals(updateData);
-            updateData.nutritional_goals = goals;
-        } catch (err) {
-            console.error("AI Goal calculation failed:", err);
-            // Fallback default goals if AI fails
-        }
-      }
-
-      // Update profile in supabase
-      const success = await updateProfile(updateData);
-
-      if (success) {
-        alert('Profile updated successfully! AI has set your daily nutritional limits.');
-        if (personalizationStatus) personalizationStatus.style.display = 'flex';
-      } else {
-        alert('Failed to update profile. Please try again.');
-      }
-      
-      // Update password if provided
-      if (newPassword) {
-        try {
-          const { error } = await supabase_client.auth.updateUser({
-            password: newPassword
-          });
-          
-          if (error) throw error;
-          
-          alert('Password updated successfully!');
-        } catch (error) {
-          alert(`Failed to update password: ${error.message}`);
-        }
-      }
+      if (await updateProfile(updateData)) alert('Profile updated!');
     };
   }
-  
-  // Change avatar
-  const changeAvatarBtn = document.getElementById('change-avatar');
-  if (changeAvatarBtn) {
-    changeAvatarBtn.onclick = () => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      
-      input.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        if (file.size > 2 * 1024 * 1024) {
-          alert('File size must be less than 2MB');
-          return;
-        }
-        
-        try {
-          // Upload to supabase storage
-          const fileName = `avatar-${currentUser.id}-${Date.now()}`;
-          const { data, error } = await supabase_client.storage
-            .from('avatars')
-            .upload(fileName, file);
-          
-          if (error) throw error;
-          
-          // Get public URL
-          const { data: urlData } = await supabase_client.storage
-            .from('avatars')
-            .getPublicUrl(fileName);
-          
-          // Update profile with new avatar URL
-          const avatarUrl = urlData.publicUrl;
-          const success = await updateProfile({ avatar_url: avatarUrl });
-          
-          if (success) {
-            avatarImg.src = avatarUrl;
-            if (userAvatarElem) userAvatarElem.src = avatarUrl;
-          }
-          
-        } catch (error) {
-          alert(`Failed to upload avatar: ${error.message}`);
-        }
-      };
-      
-      input.click();
-    };
-  }
-  
+  modal.style.display = 'block';
 }
 
-// Show upgrade modal
-function showUpgradeModal() {
-  // Not needed in unified experience
+async function calculateNutritionalGoals(profile) {
+    const prompt = `Based on profile: Gender ${profile.gender}, Age ${profile.age}, Weight ${profile.weight_kg}kg. Respond ONLY with JSON: calories, protein, carbs, fat, sugar, sodium.`;
+    const response = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer sk_ZDnV9hilntSLCLGEmJKPxavBNJaPLI4K' },
+        body: JSON.stringify({ model: 'claude-fast', messages: [{ role: 'user', content: prompt }], response_format: { type: 'json_object' } })
+    });
+    const data = await response.json();
+    return extractJSON(data.choices[0].message.content);
 }
-
-// Initialize event listeners
-document.addEventListener('DOMContentLoaded', () => {
-  // Check authentication on page load
-  checkAuth();
-  
-  // Logout event
-  const logoutLink = document.getElementById('logout-link');
-  if (logoutLink) {
-    logoutLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      handleLogout();
-    });
-  }
-  
-  // Profile link
-  const profileLink = document.getElementById('profile-link');
-  if (profileLink) {
-    profileLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      window.showProfileModal();
-    });
-  }
-  
-  // Admin link
-  const adminLink = document.getElementById('admin-link');
-  if (adminLink) {
-    adminLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      if (window.admin && typeof window.admin.showAdminDashboard === 'function') {
-        window.admin.showAdminDashboard();
-      } else {
-        console.error('Admin functionality not available');
-      }
-    });
-  }
-  
-  
-  // Close modals when clicking outside
-  window.addEventListener('click', (e) => {
-    const modals = document.querySelectorAll('.modal');
-    modals.forEach(modal => {
-      if (e.target === modal) {
-        modal.style.display = 'none';
-      }
-    });
-  });
-  
-  // Close buttons in modals
-  document.querySelectorAll('.close-modal').forEach(button => {
-    button.addEventListener('click', () => {
-      const modal = button.closest('.modal');
-      modal.style.display = 'none';
-    });
-  });
-});
-
-// Check for auth errors in URL hash on page load
-window.addEventListener('DOMContentLoaded', () => {
-  const hash = window.location.hash;
-  if (hash.includes('error=')) {
-    const params = new URLSearchParams(hash.substring(1));
-    const error = params.get('error');
-    const errorDescription = params.get('error_description');
-    
-    if (error === 'access_denied' && params.get('error_code') === 'otp_expired') {
-      showResetPasswordForm();
-      const errorElement = document.getElementById('reset-error');
-      if (errorElement) {
-        errorElement.style.display = 'block';
-        errorElement.textContent = 'Email confirmation link has expired. Please request a new one.';
-      }
-    }
-  }
-});
-
-// Export functions to be used in other scripts
-window.showLoginForm = showLoginForm;
-window.showRegisterForm = showRegisterForm;
-window.showProfileModal = showProfileModal;
 
 window.auth = {
-  checkAuth,
-  updateScansRemaining,
-  resetDailyScanCount,
-  updateProfile,
-  calculateNutritionalGoals,
   currentUser: () => currentUser,
   userProfile: () => userProfile,
-  isPremium: () => true,
-  showLoginForm,
-  showRegisterForm,
-  getNutritionalGoals: () => userProfile?.nutritional_goals || {
-    calories: 2000,
-    protein: 50,
-    carbs: 275,
-    fat: 78,
-    sugar: 50,
-    sodium: 2300
-  }
+  updateProfile,
+  calculateNutritionalGoals,
+  updateScansRemaining: async () => true,
+  getNutritionalGoals: () => userProfile?.nutritional_goals || { calories: 2000, protein: 50, carbs: 275, fat: 78, sugar: 50, sodium: 2300 }
 };
+
+window.showRegisterForm = showRegisterForm;
+window.showLoginForm = showLoginForm;
+window.showProfileModal = showProfileModal;
+window.sb = sb;
