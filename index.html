@@ -26,10 +26,10 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
-        // Make supabaseClient available globally
-        const supabaseClient = supabase;
+        const supabaseUrl = 'https://msooyauwfmzfrvsdzxhn.supabase.co';
+        const supabaseKey = 'sb_publishable_Mmk7vR4nJ8L2p9Q0wX5yZ3aB1cE6gH9i';
+        window.sb = supabase.createClient(supabaseUrl, supabaseKey);
     </script>
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
 </head>
 <body>
     <!-- Landing Page (for unauthenticated users) -->
@@ -390,9 +390,6 @@
                     </div>
                 </div>
                 <div class="user-menu">
-                    <div class="feature-badge" id="upgrade-badge">
-                        <i class="fas fa-ad"></i> <span>Ad-Supported</span>
-                    </div>
                     <div class="user-profile" id="user-profile">
                         <img src="https://ui-avatars.com/api/?name=User&background=random" alt="User" id="user-avatar">
                         <span id="user-name">User</span>
@@ -418,14 +415,6 @@
                 <!-- Ad container at the top of the content -->
                 <div class="ad-container" data-placement="in-content"></div>
                 
-                <!-- Premium features notification -->
-                <div id="premium-notification" class="premium-notification" style="display: none;">
-                    <i class="fas fa-ad"></i>
-                    <p>You've reached your scan limit. Watch an ad to get more scans!</p>
-                    <button id="watch-ad-button" class="watch-ad-button">
-                        <i class="fas fa-play-circle"></i> Watch Ad to Continue
-                    </button>
-                </div>
                 
                 <div class="content-grid">
                     <!-- Input Panel -->
@@ -589,7 +578,6 @@
                                 <div id="ai-assistant-container" class="ai-assistant">
                                     <div class="assistant-header">
                                         <h3><i class="fas fa-robot"></i> Ask CalcuBite AI</h3>
-                                        <span class="status-badge">Pro Feature</span>
                                     </div>
                                     
                                     <div id="ai-chat-container" class="chat-messages">
@@ -639,7 +627,6 @@
                 <div class="admin-tabs">
                     <button class="admin-tab active" data-tab="users">Users</button>
                     <button class="admin-tab" data-tab="analytics">Analytics</button>
-                    <button class="admin-tab" data-tab="ads">Ad Management</button>
                     <button class="admin-tab" data-tab="settings">Settings</button>
                 </div>
                 
@@ -724,39 +711,6 @@
                     </div>
                 </div>
                 
-                <div id="ads-tab" class="admin-tab-content">
-                    <h3>Ad Management</h3>
-                    <div class="ad-controls">
-                        <!-- The placement-manager-button will be added here via JavaScript -->
-                        <button id="add-ad-button" class="primary-button">
-                            <i class="fas fa-plus"></i> Add New Ad
-                        </button>
-                    </div>
-                    <div class="ad-settings">
-                        <div class="form-group">
-                            <label for="adsense-publisher-id">Google AdSense Publisher ID (Optional)</label>
-                            <input type="text" id="adsense-publisher-id" placeholder="ca-pub-XXXXXXXXXXXXXXXX">
-                            <small>Changing this will update the AdSense script on the page</small>
-                        </div>
-                        <button id="save-adsense-id" class="secondary-button">Save AdSense ID</button>
-                    </div>
-                    <table class="admin-table">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Name</th>
-                                <th>Provider</th>
-                                <th>Placement</th>
-                                <th>Type</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="ads-table-body">
-                            <!-- Ad data will be loaded here -->
-                        </tbody>
-                    </table>
-                </div>
                 
                 <div id="settings-tab" class="admin-tab-content">
                     <h3>System Settings</h3>
@@ -825,23 +779,6 @@
                         <button type="submit" class="primary-button">Update Profile</button>
                     </form>
                     
-                    <div class="subscription-section">
-                        <h3>Ad Settings</h3>
-                        <p>This application is supported by ads. Watching an ad grants you additional scans.</p>
-                        <div class="ad-settings">
-                            <div class="ad-setting-item">
-                                <h4>Scans per day</h4>
-                                <p>You can perform up to 5 scans per day for free.</p>
-                            </div>
-                            <div class="ad-setting-item">
-                                <h4>Ad rewards</h4>
-                                <p>Each ad you watch gives you one scan.</p>
-                            </div>
-                            <button id="watch-ad-now" class="primary-button">
-                                <i class="fas fa-play-circle"></i> Watch Ad Now
-                            </button>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -878,8 +815,8 @@
             <h2>Login to your account</h2>
             <form id="login-form" class="auth-form">
                 <div class="form-group">
-                    <label for="login-email">Email</label>
-                    <input type="email" id="login-email" placeholder="Your email" required>
+                    <label for="login-username">Username</label>
+                    <input type="text" id="login-username" placeholder="Your username" required>
                 </div>
                 <div class="form-group">
                     <label for="login-password">Password</label>
@@ -926,8 +863,8 @@
                     <input type="text" id="register-name" placeholder="Your name" required>
                 </div>
                 <div class="form-group">
-                    <label for="register-email">Email</label>
-                    <input type="email" id="register-email" placeholder="Your email" required>
+                    <label for="register-username">Username</label>
+                    <input type="text" id="register-username" placeholder="Choose a username" required>
                 </div>
                 <div class="form-group">
                     <label for="register-password">Password</label>
@@ -974,11 +911,11 @@
                 <h1>CalcuBite AI</h1>
             </div>
             <h2>Reset your password</h2>
-            <p class="reset-info">Enter your email address and we'll send you a link to reset your password.</p>
+            <p class="reset-info">Enter your username and we'll send you a link to reset your password.</p>
             <form id="reset-form" class="auth-form">
                 <div class="form-group">
-                    <label for="reset-email">Email</label>
-                    <input type="email" id="reset-email" placeholder="Your email" required>
+                    <label for="reset-username">Username</label>
+                    <input type="text" id="reset-username" placeholder="Your username" required>
                 </div>
                 <div class="form-error" id="reset-error"></div>
                 <div class="form-success" id="reset-success"></div>
@@ -996,41 +933,5 @@
     <script src="auth.js"></script>
     <script src="admin.js"></script>
     <script src="script.js"></script>
-    <script>
-      // Create health goals table if needed
-      async function createHealthGoalsTable() {
-        if (window.auth && window.auth.currentUser()) {
-          // Check if health_goals table exists
-          try {
-            await supabase.rpc('create_health_goals_table_if_needed');
-          } catch (rpcError) {
-            console.log("Creating health goals table with raw SQL");
-            try {
-              await supabase.from('health_goals').select('count');
-            } catch (error) {
-              // Table likely doesn't exist, create it
-              const { error: sqlError } = await supabase.sql(`
-                CREATE TABLE IF NOT EXISTS health_goals (
-                  id SERIAL PRIMARY KEY,
-                  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-                  goal_type VARCHAR(100) NOT NULL,
-                  target TEXT NOT NULL,
-                  timeline VARCHAR(100),
-                  notes TEXT,
-                  progress INT DEFAULT 0,
-                  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-                  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-                );
-                CREATE INDEX IF NOT EXISTS idx_health_goals_user_id ON health_goals(user_id);
-              `);
-              
-              if (sqlError) console.error("Failed to create health goals table:", sqlError);
-            }
-          }
-        }
-      }
-      // Call this function when app loads
-      document.addEventListener('DOMContentLoaded', createHealthGoalsTable);
-    </script>
 </body>
 </html>

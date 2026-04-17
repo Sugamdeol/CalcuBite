@@ -1,7 +1,11 @@
-// Supabase initialization
-const supabaseUrl = 'https://wefdmpmdyquuspucxpnn.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndlZmRtcG1keXF1dXNwdWN4cG5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA5MTU2MDMsImV4cCI6MjA1NjQ5MTYwM30.Lhn5TRevwGosKH05m2D9UoNWtw0uVq-WDGDhliY8gzg';
-const supabase = supabaseClient.createClient(supabaseUrl, supabaseKey);
+// Supabase initialization is handled in index.html as window.sb
+
+// Helper to map username to internal email
+function usernameToEmail(username) {
+  if (!username) return null;
+  if (username.includes('@')) return username; // Fallback if email is somehow passed
+  return `${username.toLowerCase().trim()}@nutriscanai-internal.com`;
+}
 
 // DOM elements
 const authContainer = document.getElementById('auth-container');
@@ -23,7 +27,7 @@ let lastAdWatched = null;
 
 // Authentication state
 async function checkAuth() {
-  const { data, error } = await supabase.auth.getSession();
+  const { data, error } = await window.sb.auth.getSession();
   
   if (error) {
     console.error('Error checking authentication:', error);
@@ -46,7 +50,7 @@ async function checkAuth() {
 async function fetchUserProfile() {
   if (!currentUser) return;
   
-  const { data, error } = await supabase
+  const { data, error } = await window.sb
     .from('profiles')
     .select('*')
     .eq('id', currentUser.id)
@@ -71,7 +75,7 @@ async function createUserProfile() {
   if (!currentUser) return null;
   
   try {
-    const { data, error } = await supabase
+    const { data, error } = await window.sb
       .from('profiles')
       .insert([{
         id: currentUser.id,
@@ -79,7 +83,7 @@ async function createUserProfile() {
         avatar_url: currentUser.user_metadata?.avatar_url || null,
         email: currentUser.email,
         is_admin: false,
-        scans_remaining: 5,
+        scans_remaining: 999999,
         last_scan_reset: new Date().toISOString()
       }])
       .select()
@@ -278,13 +282,14 @@ function showResetPasswordForm(e) {
 async function handleLogin(e) {
   e.preventDefault();
   
-  const email = document.getElementById('login-email').value;
+  const username = document.getElementById('login-username').value;
+  const email = usernameToEmail(username);
   const password = document.getElementById('login-password').value;
   const rememberMe = document.getElementById('remember-me').checked;
   const errorElement = document.getElementById('login-error');
   
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await window.sb.auth.signInWithPassword({
       email,
       password,
       options: {
@@ -309,7 +314,8 @@ async function handleRegister(e) {
   e.preventDefault();
   
   const fullName = document.getElementById('register-name').value;
-  const email = document.getElementById('register-email').value;
+  const username = document.getElementById('register-username').value;
+  const email = usernameToEmail(username);
   const password = document.getElementById('register-password').value;
   const termsAgreed = document.getElementById('terms-agree').checked;
   const errorElement = document.getElementById('register-error');
@@ -321,7 +327,7 @@ async function handleRegister(e) {
   }
   
   try {
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await window.sb.auth.signUp({
       email,
       password,
       options: {
@@ -355,12 +361,13 @@ async function handleRegister(e) {
 async function handleResetPassword(e) {
   e.preventDefault();
   
-  const email = document.getElementById('reset-email').value;
+  const username = document.getElementById('reset-username').value;
+  const email = usernameToEmail(username);
   const errorElement = document.getElementById('reset-error');
   const successElement = document.getElementById('reset-success');
   
   try {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    const { error } = await window.sb.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}`,
     });
     
@@ -383,7 +390,7 @@ async function handleResetPassword(e) {
 // Handle Google login
 async function handleGoogleLogin() {
   try {
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { error } = await window.sb.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: window.location.origin
@@ -401,7 +408,7 @@ async function handleGoogleLogin() {
 // Handle logout
 async function handleLogout() {
   try {
-    await supabase.auth.signOut();
+    await window.sb.auth.signOut();
     currentUser = null;
     userProfile = null;
     showLoginForm();
@@ -524,11 +531,11 @@ async function watchAd() {
       
       // Update in database
       if (currentUser) {
-        const { error } = await supabase
+        const { error } = await window.sb
           .from('profiles')
           .update({ 
             last_ad_watched: lastAdWatched,
-            scans_remaining: 999 
+            scans_remaining: 999999
           })
           .eq('id', currentUser.id);
         
@@ -538,7 +545,7 @@ async function watchAd() {
         
         // Update analytics
         try {
-          const { error: analyticsError } = await supabase
+          const { error: analyticsError } = await window.sb
             .from('analytics')
             .insert([{
               user_id: currentUser.id,
@@ -581,18 +588,18 @@ async function resetScansAfterAd() {
   
   try {
     // Get the system settings to determine max scans
-    const { data: settingsData, error: settingsError } = await supabase
+    const { data: settingsData, error: settingsError } = await window.sb
       .from('system_settings')
       .select('free_scans_per_day')
       .single();
     
-    const defaultScans = 5;
+    const defaultScans = 999999;
     const maxScans = settingsData?.free_scans_per_day || defaultScans;
     
     // Update the user's scans_remaining to max value
-    const { error } = await supabase
+    const { error } = await window.sb
       .from('profiles')
-      .update({ scans_remaining: 999 }) 
+      .update({ scans_remaining: 999999 })
       .eq('id', currentUser.id);
     
     if (error) {
@@ -602,7 +609,7 @@ async function resetScansAfterAd() {
     
     // Update local user profile
     if (userProfile) {
-      userProfile.scans_remaining = 999;
+      userProfile.scans_remaining = 999999;
     }
     
     return true;
@@ -632,15 +639,14 @@ async function updateScansRemaining(scansUsed = 1) {
   }
   
   if (userProfile.scans_remaining <= 0) {
-    // Out of scans, show notification
-    if (premiumNotification) premiumNotification.style.display = 'flex';
-    return false;
+    // Should not happen with unlimited, but for safety:
+    userProfile.scans_remaining = 999999;
   }
   
-  const newScansRemaining = userProfile.scans_remaining - scansUsed;
+  const newScansRemaining = Math.max(0, userProfile.scans_remaining - scansUsed);
   
   try {
-    const { error } = await supabase
+    const { error } = await window.sb
       .from('profiles')
       .update({ scans_remaining: newScansRemaining })
       .eq('id', currentUser.id);
@@ -664,10 +670,10 @@ async function resetDailyScanCount() {
   const dayDiff = Math.floor((now - lastReset) / (1000 * 60 * 60 * 24));
   
   if (dayDiff >= 1) {
-    const { error } = await supabase
+    const { error } = await window.sb
       .from('profiles')
       .update({
-        scans_remaining: 5, 
+        scans_remaining: 999999,
         last_scan_reset: now.toISOString()
       })
       .eq('id', currentUser.id);
@@ -677,7 +683,7 @@ async function resetDailyScanCount() {
       return;
     }
     
-    userProfile.scans_remaining = 5;
+    userProfile.scans_remaining = 999999;
     userProfile.last_scan_reset = now.toISOString();
   }
 }
@@ -686,7 +692,7 @@ async function resetDailyScanCount() {
 async function updateProfile(profileData) {
   if (!currentUser) return;
   
-  const { error } = await supabase
+  const { error } = await window.sb
     .from('profiles')
     .update(profileData)
     .eq('id', currentUser.id);
@@ -751,8 +757,10 @@ function populateProfileModal() {
   
   // Fill profile data
   nameInput.value = userProfile?.full_name || '';
-  emailInput.value = currentUser?.email || '';
-  if (planInput) planInput.value = 'Free';
+  const usernameDisplay = currentUser?.email ? currentUser.email.split('@')[0] : '';
+  const profileUsernameInput = document.getElementById('profile-username');
+  if (profileUsernameInput) profileUsernameInput.value = usernameDisplay;
+  if (planInput) planInput.value = 'Unlimited';
   
   if (userProfile?.avatar_url) {
     avatarImg.src = userProfile.avatar_url;
@@ -791,7 +799,7 @@ function populateProfileModal() {
         updateData.full_name = newName;
       }
       
-      // Update profile in supabase
+      // Update profile in window.sb
       if (Object.keys(updateData).length > 0) {
         const success = await updateProfile(updateData);
         
@@ -805,7 +813,7 @@ function populateProfileModal() {
       // Update password if provided
       if (newPassword) {
         try {
-          const { error } = await supabase.auth.updateUser({
+          const { error } = await window.sb.auth.updateUser({
             password: newPassword
           });
           
@@ -837,16 +845,16 @@ function populateProfileModal() {
         }
         
         try {
-          // Upload to supabase storage
+          // Upload to window.sb storage
           const fileName = `avatar-${currentUser.id}-${Date.now()}`;
-          const { data, error } = await supabase.storage
+          const { data, error } = await window.sb.storage
             .from('avatars')
             .upload(fileName, file);
           
           if (error) throw error;
           
           // Get public URL
-          const { data: urlData } = await supabase.storage
+          const { data: urlData } = await window.sb.storage
             .from('avatars')
             .getPublicUrl(fileName);
           

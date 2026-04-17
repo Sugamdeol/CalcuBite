@@ -219,7 +219,7 @@ async function logScan(scanType, scanData) {
   if (!window.auth.currentUser()) return;
   
   try {
-    await supabase
+    await window.sb
       .from('scan_history')
       .insert([{
         user_id: window.auth.currentUser().id,
@@ -235,98 +235,48 @@ async function logScan(scanType, scanData) {
   }
 }
 
+// Log This Meal feature
+async function logThisMeal(data) {
+  if (!window.auth.currentUser()) {
+    alert('Please log in to track your meals.');
+    return;
+  }
+
+  const nutrition = data.nutritionEstimate || {};
+  const calories = parseInt(nutrition.calories) || 0;
+  const protein = parseInt(nutrition.protein) || 0;
+  const carbs = parseInt(nutrition.carbs) || 0;
+  const fat = parseInt(nutrition.fat) || 0;
+
+  try {
+    const { error } = await window.sb
+      .from('daily_logs')
+      .insert([{
+        user_id: window.auth.currentUser().id,
+        meal_name: data.foodIdentification?.mainItems?.join(', ') || 'Scanned Meal',
+        calories,
+        protein,
+        carbs,
+        fat,
+        logged_at: new Date().toISOString()
+      }]);
+
+    if (error) throw error;
+    alert('Meal logged successfully! Check your dashboard for progress.');
+  } catch (err) {
+    console.error('Error logging meal:', err);
+    alert('Failed to log meal: ' + err.message);
+  }
+}
+
 // Analyze image with AI
 async function analyzeImage(base64Image) {
-  // Check if user can perform a scan
+  // Scans are unlimited
   if (window.auth.currentUser()) {
     try {
-      const adWatchedTime = window.auth.lastAdWatched() ? new Date(window.auth.lastAdWatched()) : null;
-      const now = new Date();
-      const needsAd = !adWatchedTime || ((now - adWatchedTime) / (1000 * 60 * 60)) >= 24;
-      
-      if (needsAd) {
-        // Show ad before analysis
-        await new Promise((resolve) => {
-          const adModal = document.getElementById('ad-modal');
-          const adTimerElement = document.getElementById('ad-timer');
-          const skipButton = document.getElementById('ad-skip-button');
-          const skipTimerElement = document.getElementById('skip-timer');
-          
-          if (!adModal || !adTimerElement || !skipButton || !skipTimerElement) {
-            console.error('Ad elements not found');
-            resolve();
-            return;
-          }
-          
-          // Show ad modal
-          adModal.style.display = 'block';
-          
-          // Simulate ad playback
-          let adDuration = 10; 
-          let skipDuration = 3; 
-          
-          // Update ad timer every second
-          const adInterval = setInterval(() => {
-            adTimerElement.textContent = `${adDuration}s`;
-            adDuration--;
-            
-            if (adDuration < 0) {
-              clearInterval(adInterval);
-              completeAd();
-            }
-          }, 1000);
-          
-          // Update skip timer
-          const skipInterval = setInterval(() => {
-            skipTimerElement.textContent = skipDuration;
-            skipDuration--;
-            
-            if (skipDuration < 0) {
-              clearInterval(skipInterval);
-              skipButton.disabled = false;
-              skipButton.textContent = 'Skip Ad';
-            }
-          }, 1000);
-          
-          // Skip button event
-          skipButton.addEventListener('click', function skipHandler() {
-            if (!skipButton.disabled) {
-              clearInterval(adInterval);
-              clearInterval(skipInterval);
-              skipButton.removeEventListener('click', skipHandler);
-              completeAd();
-            }
-          });
-          
-          // Complete ad function
-          async function completeAd() {
-            // Hide ad modal
-            adModal.style.display = 'none';
-            
-            // Update user profile with ad watched time and reset scans
-            if (window.auth.currentUser()) {
-              await window.auth.watchAd();
-            }
-            
-            resolve();
-          }
-        });
-      }
-      
-      const canScan = await window.auth.updateScansRemaining(1);
-      if (!canScan) {
-        // Show ad notification if user can't scan
-        const premiumNotification = document.getElementById('premium-notification');
-        if (premiumNotification) premiumNotification.style.display = 'flex';
-        loadingDiv.style.display = 'none';
-        return;
-      }
+      await window.auth.updateScansRemaining(1);
     } catch (error) {
-      console.error('Error checking scan permissions:', error);
-      loadingDiv.style.display = 'none';
-      errorDiv.style.display = 'block';
-      errorDiv.textContent = 'Error with user permissions. Please try logging in again.';
-      return;
+      console.error('Error updating scan count:', error);
     }
   }
 
@@ -598,12 +548,12 @@ Your response MUST be valid JSON with this structure:
         ]
       }
     ],
-    model: "openai-large",
+    model: "claude-fast",
     jsonMode: true,
     private: true
   };
   
-  const response = await fetch('https://text.pollinations.ai/', {
+  const response = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -664,6 +614,17 @@ function displayResults(data) {
   // Health Score with more visual elements
   const healthScoreEl = document.getElementById('healthScore');
   const rating = data.rating || 'N/A';
+
+  // Add Log Meal button if not present
+  if (healthScoreEl && !document.getElementById('log-meal-btn')) {
+    const logBtn = document.createElement('button');
+    logBtn.id = 'log-meal-btn';
+    logBtn.className = 'primary-button';
+    logBtn.style.marginTop = '1rem';
+    logBtn.innerHTML = '<i class="fas fa-plus"></i> Log This Meal';
+    logBtn.onclick = () => logThisMeal(data);
+    healthScoreEl.appendChild(logBtn);
+  }
   let ratingColor = rating >= 7 ? 'var(--success)' : (rating >= 4 ? 'var(--warning)' : 'var(--danger)');
   let ratingIcon = rating >= 7 ? 'thumbs-up' : (rating >= 4 ? 'meh' : 'thumbs-down');
   let scoreTitle = currentMode === 'gym' ? 'Fitness Score' : 'Health Score';
@@ -1491,13 +1452,13 @@ If the user asks about something not related to nutrition or health, politely re
     messages.push(...conversationHistory);
     
     // Make request to Pollination API
-    const response = await fetch('https://text.pollinations.ai/v1/chat/completions', {
+    const response = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: "openai-large",
+        model: "claude-fast",
         messages: messages,
         temperature: 0.7,
         max_tokens: 800,
@@ -1563,9 +1524,136 @@ If the user asks about something not related to nutrition or health, politely re
   }
 }
 
+// Check onboarding status
+async function checkOnboarding() {
+  const profile = window.auth.userProfile();
+  if (!profile) return;
+
+  if (!profile.gender || !profile.age || !profile.weight) {
+    showOnboardingModal();
+  }
+}
+
+// Show onboarding modal
+function showOnboardingModal() {
+  let onboardingModal = document.getElementById('onboarding-modal');
+  if (!onboardingModal) {
+    onboardingModal = document.createElement('div');
+    onboardingModal.id = 'onboarding-modal';
+    onboardingModal.className = 'modal';
+    onboardingModal.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2><i class="fas fa-user-circle"></i> Complete Your Profile</h2>
+        </div>
+        <div class="modal-body">
+          <p>Please provide a few details to personalize your AI nutrition goals.</p>
+          <form id="onboarding-form">
+            <div class="form-group">
+              <label>Gender</label>
+              <select id="onboard-gender" required>
+                <option value="">Select gender</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Age</label>
+              <input type="number" id="onboard-age" placeholder="Your age" required>
+            </div>
+            <div class="form-group">
+              <label>Weight (kg)</label>
+              <input type="number" id="onboard-weight" placeholder="Your weight in kg" required>
+            </div>
+            <div class="form-group">
+              <label>Height (cm)</label>
+              <input type="number" id="onboard-height" placeholder="Your height in cm" required>
+            </div>
+            <div class="form-group">
+              <label>Activity Level</label>
+              <select id="onboard-activity" required>
+                <option value="sedentary">Sedentary</option>
+                <option value="light">Lightly Active</option>
+                <option value="moderate">Moderately Active</option>
+                <option value="active">Very Active</option>
+              </select>
+            </div>
+            <button type="submit" class="primary-button">Start Personalizing</button>
+          </form>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(onboardingModal);
+
+    document.getElementById('onboarding-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const updates = {
+        gender: document.getElementById('onboard-gender').value,
+        age: parseInt(document.getElementById('onboard-age').value),
+        weight: parseFloat(document.getElementById('onboard-weight').value),
+        height: parseFloat(document.getElementById('onboard-height').value),
+        activity_level: document.getElementById('onboard-activity').value
+      };
+
+      try {
+        const { error } = await window.sb
+          .from('profiles')
+          .update(updates)
+          .eq('id', window.auth.currentUser().id);
+
+        if (error) throw error;
+
+        // Calculate and set goals based on profile
+        await calculatePersonalizedGoals(updates);
+
+        onboardingModal.style.display = 'none';
+        alert('Profile updated! Your AI analysis will now be personalized.');
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
+  }
+  onboardingModal.style.display = 'block';
+}
+
+// Calculate goals based on profile
+async function calculatePersonalizedGoals(profile) {
+  // Simple BMR + Activity Level calculation (Mifflin-St Jeor)
+  let bmr;
+  if (profile.gender === 'male') {
+    bmr = 10 * profile.weight + 6.25 * profile.height - 5 * profile.age + 5;
+  } else {
+    bmr = 10 * profile.weight + 6.25 * profile.height - 5 * profile.age - 161;
+  }
+
+  const multipliers = { sedentary: 1.2, light: 1.375, moderate: 1.55, active: 1.725 };
+  const calories = Math.round(bmr * (multipliers[profile.activity_level] || 1.2));
+
+  // Set default targets
+  const protein = Math.round(profile.weight * 1.8);
+  const fats = Math.round((calories * 0.25) / 9);
+  const carbs = Math.round((calories - (protein * 4) - (fats * 9)) / 4);
+
+  const goals = [
+    { goal_type: 'Calories', target: `${calories} kcal`, timeline: 'Daily' },
+    { goal_type: 'Protein', target: `${protein}g`, timeline: 'Daily' },
+    { goal_type: 'Carbs', target: `${carbs}g`, timeline: 'Daily' },
+    { goal_type: 'Fats', target: `${fats}g`, timeline: 'Daily' }
+  ];
+
+  for (const goal of goals) {
+    await window.sb.from('health_goals').insert([{
+      user_id: window.auth.currentUser().id,
+      ...goal
+    }]);
+  }
+}
+
 // Show dashboard functionality
 function showDashboard() {
   try {
+    checkOnboarding();
     // Create dashboard modal if it doesn't exist
     let dashboardModal = document.getElementById('dashboard-modal');
     
@@ -1701,7 +1789,7 @@ async function fetchDashboardData() {
   
   try {
     // Fetch scan history
-    const { data: scanData, error: scanError } = await supabase
+    const { data: scanData, error: scanError } = await window.sb
       .from('scan_history')
       .select('*')
       .eq('user_id', window.auth.currentUser().id)
@@ -1711,7 +1799,7 @@ async function fetchDashboardData() {
     if (scanError) throw scanError;
     
     // Fetch health goals
-    const { data: goalData, error: goalError } = await supabase
+    const { data: goalData, error: goalError } = await window.sb
       .from('health_goals')
       .select('*')
       .eq('user_id', window.auth.currentUser().id)
@@ -1720,7 +1808,7 @@ async function fetchDashboardData() {
     if (goalError) throw goalError;
     
     // Fetch profile for scans remaining
-    const { data: profileData, error: profileError } = await supabase
+    const { data: profileData, error: profileError } = await window.sb
       .from('profiles')
       .select('scans_remaining')
       .eq('id', window.auth.currentUser().id)
@@ -2015,7 +2103,7 @@ async function saveGoal() {
     }
     
     // Check for duplicate goal prevention
-    const { data: existingGoals, error: checkError } = await supabase
+    const { data: existingGoals, error: checkError } = await window.sb
       .from('health_goals')
       .select('id')
       .eq('user_id', window.auth.currentUser().id)
@@ -2030,7 +2118,7 @@ async function saveGoal() {
       return;
     }
     
-    const { data, error } = await supabase
+    const { data, error } = await window.sb
       .from('health_goals')
       .insert([{
         user_id: window.auth.currentUser().id,
@@ -2067,7 +2155,7 @@ async function deleteGoal(goalId) {
   }
   
   try {
-    const { error } = await supabase
+    const { error } = await window.sb
       .from('health_goals')
       .delete()
       .eq('id', goalId);
@@ -2113,154 +2201,9 @@ function toggleTheme() {
   }
 }
 
-// Load ads
-async function loadAds() {
-  try {
-    // Get active ads for each placement
-    const { data, error } = await supabase
-      .from('ads')
-      .select('*')
-      .eq('active', true)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error loading ads:', error);
-      return;
-    }
-    
-    if (!data || data.length === 0) {
-      return;
-    }
-    
-    // Group ads by placement
-    const adsByPlacement = {};
-    data.forEach(ad => {
-      const placement = ad.placement || 'in-content';
-      if (!adsByPlacement[placement]) {
-        adsByPlacement[placement] = [];
-      }
-      adsByPlacement[placement].push(ad);
-    });
-    
-    // Display ads in their designated placements
-    Object.keys(adsByPlacement).forEach(placement => {
-      const adContainers = document.querySelectorAll(`.ad-container[data-placement="${placement}"]`);
-      if (adContainers.length === 0) return;
-      
-      // Randomly select an ad for this placement
-      const randomIndex = Math.floor(Math.random() * adsByPlacement[placement].length);
-      const ad = adsByPlacement[placement][randomIndex];
-      
-      adContainers.forEach(container => {
-        if (ad.provider === 'custom') {
-          // Display custom ad
-          container.innerHTML = '';
-          if (ad.type === 'banner' && ad.file_url) {
-            container.innerHTML = `
-              <div class="custom-ad ${ad.size || 'medium'}" data-ad-id="${ad.id}">
-                <img src="${ad.file_url}" alt="${ad.name}" class="ad-image">
-              </div>
-            `;
-          } else if (ad.type === 'video' && ad.file_url) {
-            container.innerHTML = `
-              <div class="custom-ad ${ad.size || 'medium'}" data-ad-id="${ad.id}">
-                <video controls class="ad-video">
-                  <source src="${ad.file_url}" type="video/mp4">
-                  Your browser does not support the video tag.
-                </video>
-              </div>
-            `;
-          }
-          
-          // Log impression
-          logAdImpression(ad.id);
-          
-        } else if (ad.ad_code) {
-          // Display ad from external provider using ad code
-          const adWrapper = document.createElement('div');
-          adWrapper.className = 'external-ad-wrapper';
-          adWrapper.dataset.adId = ad.id;
-          
-          // Insert the ad code safely
-          adWrapper.innerHTML = ad.ad_code;
-          
-          // Clear and append
-          container.innerHTML = '';
-          container.appendChild(adWrapper);
-          
-          // Execute any scripts in the ad code
-          const scripts = adWrapper.querySelectorAll('script');
-          scripts.forEach(oldScript => {
-            const newScript = document.createElement('script');
-            
-            // Copy all attributes
-            Array.from(oldScript.attributes).forEach(attr => {
-              newScript.setAttribute(attr.name, attr.value);
-            });
-            
-            // Copy inline script content
-            newScript.textContent = oldScript.textContent;
-            
-            // Replace old script with new one to execute it
-            oldScript.parentNode.replaceChild(newScript, oldScript);
-          });
-          
-          // Log impression
-          logAdImpression(ad.id);
-        }
-      });
-    });
-    
-  } catch (error) {
-    console.error('Error in loadAds:', error);
-  }
-}
+// Load ads removed as per directive
+async function loadAds() {}
 
-// Log ad impression
-async function logAdImpression(adId) {
-  if (!window.auth.currentUser()) return;
-  
-  try {
-    await supabase
-      .from('ads')
-      .update({ impressions: supabase.rpc('increment', { count: 1 }) })
-      .eq('id', adId);
-    
-    // Also log in analytics
-    await supabase
-      .from('analytics')
-      .insert([{
-        user_id: window.auth.currentUser().id,
-        event_type: 'ad_impression',
-        event_data: { ad_id: adId }
-      }]);
-  } catch (error) {
-    console.error('Error logging ad impression:', error);
-  }
-}
-
-// Log ad click
-async function logAdClick(adId) {
-  if (!window.auth.currentUser()) return;
-  
-  try {
-    await supabase
-      .from('ads')
-      .update({ clicks: supabase.rpc('increment', { count: 1 }) })
-      .eq('id', adId);
-    
-    // Also log in analytics
-    await supabase
-      .from('analytics')
-      .insert([{
-        user_id: window.auth.currentUser().id,
-        event_type: 'ad_click',
-        event_data: { ad_id: adId }
-      }]);
-  } catch (error) {
-    console.error('Error logging ad click:', error);
-  }
-}
 
 // Add event listeners for ad clicks
 document.addEventListener('click', function(e) {
@@ -2273,22 +2216,6 @@ document.addEventListener('click', function(e) {
   }
 });
 
-// Check if user has watched an ad recently
-function checkAdUnlock() {
-  if (!premiumNotification) return;
-  
-  const now = new Date();
-  const adWatchedTime = lastAdWatched ? new Date(lastAdWatched) : null;
-  
-  // Ad unlocks features for 24 hours
-  if (adWatchedTime && ((now - adWatchedTime) / (1000 * 60 * 60)) < 24) {
-    premiumNotification.style.display = 'none';
-    return true; // User has active ad benefit
-  } else {
-    premiumNotification.style.display = 'flex';
-    return false; // User needs to watch ad
-  }
-}
 
 // Create scan history chart
 function createScanHistoryChart() {
@@ -2304,6 +2231,9 @@ function createScanHistoryChart() {
   // Group scan data by date
   const scansByDate = {};
   
+  // Before showing charts, check onboarding
+  checkOnboarding();
+
   if (userDashboardData?.scans) {
     // Create date range for the last 14 days
     const dateLabels = [];
@@ -2519,6 +2449,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Reset daily scan count if needed
   if (window.auth.currentUser()) {
     window.auth.resetDailyScanCount();
+    checkOnboarding();
   }
   
   // Load ads
