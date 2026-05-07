@@ -69,7 +69,7 @@ function initAuthListeners() {
         try {
             await window.auth.login(u, p);
             window.location.reload();
-        } catch (e) { alert(e.message); }
+        } catch (e) { console.error(e); alert("Error: " + e.message); }
     };
 
     document.getElementById('signup-submit').onclick = async () => {
@@ -81,7 +81,7 @@ function initAuthListeners() {
             await window.auth.signup(u, f, p);
             alert('Signup successful! Please login.');
             window.location.reload();
-        } catch (e) { alert(e.message); }
+        } catch (e) { console.error(e); alert("Error: " + e.message); }
     };
 
     document.getElementById('logout-btn').onclick = (e) => {
