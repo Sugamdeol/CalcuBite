@@ -1,11 +1,22 @@
 # NutriScan AI
 
-## How to Access Admin Panel
+Neobrutalist AI Health & Nutrition Tracker. No Ads. No Limits.
 
-To access the admin panel, follow these steps:
+## Features
+- **Neobrutalist Design**: High-contrast, bold UI with hard shadows.
+- **AI Scanning**: Instant nutrition analysis from food images using Pollinations AI (OpenAI-Large).
+- **Personalized Goals**: AI calculates your daily limits based on age, weight, activity, and health conditions.
+- **Visual Dashboard**: Track Calories, Sugar, Protein, Carbs, Fats, and more.
+- **30-Day History**: Keep a log of all your meals for the past month.
+- **Simple Auth**: No OTP, no ads, just sign up and start tracking.
 
-1. First, make sure you're registered and logged in with an admin account.
-2. Set admin permissions for your account by running this SQL query in Supabase SQL Editor:
-   ```sql
-   UPDATE profiles SET is_admin = true WHERE id = 'YOUR_USER_ID';
+## Tech Stack
+- Frontend: HTML5, CSS3 (Neobrutalism), Vanilla JS
+- Backend: Supabase (Auth & Database)
+- AI: Pollinations API
 
+## Setup
+1. Clone the repo.
+2. Update the Supabase credentials in `auth.js`.
+3. Update the Pollinations API key in `script.js`.
+4. Open `index.html` in your browser or serve locally.
