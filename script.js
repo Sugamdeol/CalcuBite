@@ -18,13 +18,14 @@ let currentUser = null;
 let userProfile = null;
 let chartInstance = null;
 let lastAnalysis = null;
+let videoStream = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
     initAuthListeners();
     initNavListeners();
     initScanListeners();
-    
+
     try {
         currentUser = await window.auth.getCurrentUser();
         if (currentUser) {
@@ -41,10 +42,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 function showSection(name) {
     Object.values(sections).forEach(s => s.classList.add('hidden'));
     sections[name].classList.remove('hidden');
+
     if (currentUser) {
         nav.classList.remove('hidden');
     } else {
         nav.classList.add('hidden');
+    }
+
+    // Camera handling: Start if entering scan, stop if leaving
+    if (name === 'scan') {
+        startCamera();
+    } else {
+        stopCamera();
     }
 }
 
@@ -66,10 +75,17 @@ function initAuthListeners() {
         const u = document.getElementById('login-username').value;
         const p = document.getElementById('login-password').value;
         if (!u || !p) return alert("Please enter username and password");
+
+        loading.style.display = 'block';
         try {
             await window.auth.login(u, p);
             window.location.reload();
-        } catch (e) { console.error(e); alert("Error: " + e.message); }
+        } catch (e) {
+            console.error(e);
+            alert("Login Error: " + e.message);
+        } finally {
+            loading.style.display = 'none';
+        }
     };
 
     document.getElementById('signup-submit').onclick = async () => {
@@ -77,11 +93,19 @@ function initAuthListeners() {
         const f = document.getElementById('signup-fullname').value;
         const p = document.getElementById('signup-password').value;
         if (!u || !f || !p) return alert("Please fill all fields");
+
+        loading.style.display = 'block';
         try {
             await window.auth.signup(u, f, p);
-            alert('Signup successful! Please login.');
+            // Auto login after signup
+            await window.auth.login(u, p);
             window.location.reload();
-        } catch (e) { console.error(e); alert("Error: " + e.message); }
+        } catch (e) {
+            console.error(e);
+            alert("Signup Error: " + e.message);
+        } finally {
+            loading.style.display = 'none';
+        }
     };
 
     document.getElementById('logout-btn').onclick = (e) => {
@@ -181,6 +205,10 @@ async function refreshDashboard() {
     document.getElementById('bar-calories').style.width = `${calPercent}%`;
     document.getElementById('bar-sugar').style.width = `${sugarPercent}%`;
 
+    // Personalized Greeting
+    const greeting = document.getElementById('dash-greeting');
+    if (greeting) greeting.textContent = `Hello, ${userProfile.full_name || 'User'}!`;
+
     initWeeklyChart();
 }
 
@@ -227,20 +255,33 @@ async function initWeeklyChart() {
     });
 }
 
+// Camera Logic
+async function startCamera() {
+    const video = document.getElementById('video');
+    if (videoStream) return;
+
+    try {
+        videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = videoStream;
+    } catch (err) {
+        console.warn("Camera access denied or unavailable:", err);
+        alert("Camera access is required for scanning. Please enable it in your browser settings.");
+    }
+}
+
+function stopCamera() {
+    if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+        videoStream = null;
+    }
+}
+
 // Scan Logic
 function initScanListeners() {
     const video = document.getElementById('video');
     const captureBtn = document.getElementById('capture-btn');
     const uploadBtn = document.getElementById('upload-btn');
     const fileInput = document.getElementById('file-input');
-
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
-            video.srcObject = stream;
-        }).catch(err => {
-            console.warn("Camera access denied or unavailable:", err);
-        });
-    }
 
     captureBtn.onclick = () => {
         const canvas = document.getElementById('canvas');
@@ -299,7 +340,7 @@ async function analyzeFood(base64Image) {
 function displayResults(data) {
     const content = document.getElementById('analysis-content');
     content.innerHTML = `
-        <div class="stat-value">${data.food_name}</div>
+        <div class="stat-value" style="font-size: 2.5rem;">${data.food_name}</div>
         <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));">
             <div class="card stat-card" style="box-shadow: 4px 4px 0px #000; padding: 1rem; margin-bottom: 0;">
                 <div class="stat-label">Cals</div>
@@ -314,7 +355,7 @@ function displayResults(data) {
                 <div class="stat-value" style="font-size: 1.5rem;">${data.health_rating}</div>
             </div>
         </div>
-        <p class="mt-2"><strong>Why:</strong> ${data.reasoning}</p>
+        <p class="mt-2" style="font-size: 1.1rem;"><strong>Why:</strong> ${data.reasoning}</p>
     `;
     document.getElementById('scan-results').classList.remove('hidden');
 }

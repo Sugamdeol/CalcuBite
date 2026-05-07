@@ -142,18 +142,19 @@ textarea {
 
 input:focus {
   background-color: #f9f9f9;
+  border-color: var(--blue);
 }
 
 /* Auth Pages */
 .auth-container {
   max-width: 500px;
-  margin: 4rem auto;
+  margin: 2rem auto;
 }
 
 /* Dashboard Grid */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 2rem;
 }
 
@@ -241,14 +242,14 @@ input:focus {
   height: 100%;
   background-color: rgba(0,0,0,0.8);
   z-index: 1000;
-  padding: 2rem;
+  padding: 1rem;
   overflow-y: auto;
 }
 
 .modal-content {
   background-color: var(--bg);
-  max-width: 800px;
-  margin: 0 auto;
+  max-width: 600px;
+  margin: 10vh auto;
   border: var(--bw) solid var(--border);
   box-shadow: 20px 20px 0px 0px #000000;
   padding: 2rem;
@@ -260,7 +261,6 @@ input:focus {
   justify-content: space-between;
   align-items: center;
   padding: 1rem;
-  border-bottom: var(--bw) solid var(--border);
   background-color: white;
   margin-bottom: 1rem;
   border: var(--bw) solid var(--border);
@@ -291,30 +291,6 @@ input:focus {
   margin: 2rem 0;
 }
 
-/* Tabs */
-.tabs {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 2rem;
-}
-
-.tab-btn {
-  flex: 1;
-  padding: 1rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  border: var(--bw) solid var(--border);
-  background-color: white;
-  cursor: pointer;
-}
-
-.tab-btn.active {
-  background-color: var(--blue);
-  color: white;
-  box-shadow: var(--shadow-sm);
-  transform: translate(-2px, -2px);
-}
-
 @media (max-width: 768px) {
   .dashboard-grid {
     grid-template-columns: 1fr;
@@ -326,5 +302,9 @@ input:focus {
   .nav-links {
     flex-wrap: wrap;
     justify-content: center;
+    gap: 0.5rem;
+  }
+  .container {
+    padding: 1rem;
   }
 }
