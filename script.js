@@ -27,52 +27,88 @@ const tabContents = document.querySelectorAll('.tab-content');
 const macroSection = document.getElementById('macronutrient-section');
 
 // ============================================================
-// BazaarLink.ai — free OpenAI-compatible gateway (bazaarlink.ai/free)
-// Model: qwen/qwen3.7-flash:free (vision-capable, $0 per token)
-// Note: free tier has site-wide capacity limits, so we retry on 429.
+// Google Gemini API — free tier, via our Vercel serverless proxy
+// (api/gemini.js). The API key lives in the GEMINI_KEY env var on
+// Vercel — never in this repo or the browser bundle.
+// Primary model: gemini-3.5-flash-lite (vision-capable, $0).
+// The proxy retries and falls through the model chain on 429/503
+// (free-tier demand spikes); we also retry once client-side.
 // ============================================================
-const BAZAARLINK_URL = 'https://api.bazaarlink.ai/v1/chat/completions';
-const BAZAARLINK_KEY = 'sk-bl-wYy2Sy3zL4BEfUAQ7u86aciXkl877ujeQRpRPR2g280YoEPR';
-const BAZAARLINK_MODEL = 'qwen/qwen3.7-flash:free';
+const AI_PROXY_URL = '/api/gemini';
 
 const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function aiChat(messages, opts = {}) {
+// Convert OpenAI-style messages (system/user/assistant, text + image_url
+// content parts) into Gemini generateContent format.
+function toGeminiRequest(messages, opts) {
+  let systemText = '';
+  const contents = [];
+  for (const msg of messages) {
+    if (msg.role === 'system') {
+      if (typeof msg.content === 'string') {
+        systemText += (systemText ? '\n' : '') + msg.content;
+      }
+      continue;
+    }
+    const role = msg.role === 'assistant' ? 'model' : 'user';
+    const parts = [];
+    if (typeof msg.content === 'string') {
+      parts.push({ text: msg.content });
+    } else if (Array.isArray(msg.content)) {
+      for (const part of msg.content) {
+        if (part.type === 'text' && part.text) parts.push({ text: part.text });
+        if (part.type === 'image_url' && part.image_url && part.image_url.url) {
+          const m = part.image_url.url.match(/^data:(image\/[a-zA-Z+.]+);base64,(.+)$/);
+          if (m) parts.push({ inline_data: { mime_type: m[1], data: m[2] } });
+        }
+      }
+    }
+    if (parts.length) contents.push({ role, parts });
+  }
   const body = {
-    model: opts.model || BAZAARLINK_MODEL,
-    messages,
-    // Reasoning tokens count toward max_tokens, so keep the budget generous
-    max_tokens: opts.max_tokens || 8192,
-    ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {})
+    contents,
+    generationConfig: {
+      ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
+      maxOutputTokens: opts.max_tokens || 8192
+    }
   };
+  if (systemText) body.systemInstruction = { parts: [{ text: systemText }] };
+  return body;
+}
+
+async function aiChat(messages, opts = {}) {
+  const body = toGeminiRequest(messages, opts);
   let lastErr;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt > 0) await sleepMs(attempt === 1 ? 4000 : 10000);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await sleepMs(4000);
     let res;
     try {
-      res = await fetch(BAZAARLINK_URL, {
+      res = await fetch(AI_PROXY_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': '***' + BAZAARLINK_KEY
-        },
-        body: JSON.stringify(body)
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body })
       });
     } catch (netErr) {
       lastErr = netErr; // network failure -> retry
       continue;
     }
-    if (res.status === 429) { lastErr = new Error('busy'); continue; }
+    if (res.status === 429 || res.status === 503) {
+      lastErr = new Error('busy'); // proxy exhausted model chain -> retry once
+      continue;
+    }
     if (!res.ok) {
       throw new Error('AI service error: HTTP ' + res.status);
     }
     const data = await res.json();
-    const content = data && data.choices && data.choices[0] && data.choices[0].message
-      ? data.choices[0].message.content : '';
+    const parts = data && data.candidates && data.candidates[0] &&
+      data.candidates[0].content && data.candidates[0].content.parts;
+    const content = parts ? parts.map((p) => p.text || '').join('') : '';
     if (content) return content;
     lastErr = new Error('empty response');
   }
-  throw new Error('The free AI is busy right now (high demand). Please try again in a minute.');
+  throw lastErr && lastErr.message === 'busy'
+    ? new Error('The AI service is busy right now (high demand). Please try again in a minute.')
+    : new Error('AI service error: ' + (lastErr && lastErr.message ? lastErr.message : 'unknown'));
 }
 
 // Downscale huge camera photos before upload (keeps requests fast + cheap)
@@ -632,7 +668,7 @@ Your response MUST be valid JSON with this structure:
       "Analyze this food image and provide detailed nutritional insights:" :
       "Analyze this food image from a fitness and workout perspective:");
   
-  // BazaarLink.ai call (free tier) — image analysis
+  // Gemini call (free tier) — image analysis
   let aiContent;
   try {
     const compactImage = await shrinkBase64Image(base64Image);
@@ -1539,7 +1575,7 @@ If the user asks about something not related to nutrition or health, politely re
     
     messages.push(...conversationHistory);
     
-    // Make request to BazaarLink.ai (free tier)
+    // Make request to Gemini (free tier)
     let aiResponse;
     try {
       aiResponse = await aiChat(messages, { temperature: 0.7 });
