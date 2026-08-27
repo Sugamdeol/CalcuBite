@@ -1,10 +1,10 @@
 /* Base Variables */
 :root {
-  /* Colors */
-  --primary: #4f46e5;
-  --primary-light: #6366f1;
-  --primary-dark: #4338ca;
-  --secondary: #0ea5e9;
+  /* Colors — fresh, appetite-friendly green identity */
+  --primary: #16a34a;
+  --primary-light: #22c55e;
+  --primary-dark: #15803d;
+  --secondary: #84cc16;
   --success: #10b981; 
   --warning: #f59e0b;
   --danger: #ef4444;
@@ -46,9 +46,9 @@
 
 /* Dark Theme Variables */
 .dark-theme {
-  --primary: #818cf8;
-  --primary-light: #a5b4fc;
-  --primary-dark: #6366f1;
+  --primary: #4ade80;
+  --primary-light: #86efac;
+  --primary-dark: #22c55e;
   
   --bg-primary: #111827;
   --bg-secondary: #1f2937;
@@ -86,6 +86,12 @@ body {
   font-weight: 400;
   min-height: 100vh;
   transition: background-color var(--transition-normal), color var(--transition-normal);
+}
+
+/* Accessible focus states (web-design-guidelines) */
+:focus-visible {
+  outline: 3px solid var(--primary-light);
+  outline-offset: 2px;
 }
 
 .page-wrapper {
