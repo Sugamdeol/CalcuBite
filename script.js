@@ -214,22 +214,20 @@ fileInput.addEventListener('change', async e => {
   }
 });
 
-// Add Supabase scan history tracking
+// Log scan to cloud history (MantleDB via window.store)
 async function logScan(scanType, scanData) {
   if (!window.auth.currentUser()) return;
-  
+
   try {
-    await supabase
-      .from('scan_history')
-      .insert([{
-        user_id: window.auth.currentUser().id,
-        scan_type: scanType,
-        scan_data: {
-          rating: scanData.rating || 5,  
-          timestamp: new Date().toISOString(),
-          items: scanData.items || []
-        }
-      }]);
+    window.store.addScan({
+      scan_type: scanType,
+      scan_data: {
+        rating: scanData.rating || 5,
+        timestamp: new Date().toISOString(),
+        items: scanData.items || []
+      }
+    });
+    window.store.trackStat('scans');
   } catch (error) {
     console.error('Error logging scan:', error);
   }
@@ -578,8 +576,10 @@ Your response MUST be valid JSON with this structure:
       "Analyze this food image and provide detailed nutritional insights:" :
       "Analyze this food image from a fitness and workout perspective:");
   
-  const requestBody = {
-    messages: [
+  // Puter.js AI call (keyless) — image analysis
+  let puterResponse;
+  try {
+    puterResponse = await puter.ai.chat([
       {
         role: "system",
         content: systemPrompt
@@ -597,25 +597,21 @@ Your response MUST be valid JSON with this structure:
           }
         ]
       }
-    ],
-    model: "openai-large",
-    jsonMode: true,
-    private: true
-  };
-  
-  const response = await fetch('https://text.pollinations.ai/', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(requestBody)
-  });
-  
-  if (!response.ok) {
-    throw new Error(`API responded with status: ${response.status}`);
+    ], { model: 'gpt-5-nano' });
+  } catch (err) {
+    throw new Error('AI service error: ' + (err.message || err));
   }
-  
-  const data = await response.json();
+
+  let aiContent = puterResponse && puterResponse.message ? puterResponse.message.content : '';
+  if (Array.isArray(aiContent)) {
+    aiContent = aiContent.map(p => (typeof p === 'string' ? p : (p.text || ''))).join('');
+  }
+  if (typeof aiContent === 'string') {
+    // Strip markdown code fences some models wrap JSON in
+    aiContent = aiContent.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  }
+
+  const data = { content: aiContent };
   
   try {
     if (data && data.content) {
@@ -1490,29 +1486,24 @@ If the user asks about something not related to nutrition or health, politely re
     
     messages.push(...conversationHistory);
     
-    // Make request to Pollination API
-    const response = await fetch('https://text.pollinations.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: "openai-large",
-        messages: messages,
+    // Make request to Puter.js AI (keyless)
+    let chatResponse;
+    try {
+      chatResponse = await puter.ai.chat(messages, {
+        model: 'gpt-5-nano',
         temperature: 0.7,
-        max_tokens: 800,
-        private: true
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`API responded with status: ${response.status}`);
+        max_tokens: 800
+      });
+    } catch (err) {
+      throw new Error('AI service error: ' + (err.message || err));
     }
-    
-    const data = await response.json();
-    const aiResponse = data.choices && data.choices[0] && data.choices[0].message 
-      ? data.choices[0].message.content 
-      : "Sorry, I couldn't generate a response.";
+
+    let aiResponse = chatResponse && chatResponse.message ? chatResponse.message.content : '';
+    if (Array.isArray(aiResponse)) {
+      aiResponse = aiResponse.map(p => (typeof p === 'string' ? p : (p.text || ''))).join('');
+    }
+    aiResponse = aiResponse || "Sorry, I couldn't generate a response.";
+    window.store.trackStat('chats');
     
     // Remove loading message
     const loadingMessage = document.getElementById('ai-loading-message');
@@ -1697,44 +1688,19 @@ function showDashboard() {
 
 // Fetch dashboard data
 async function fetchDashboardData() {
-  if (!window.auth.currentUser()) return;
-  
   try {
-    // Fetch scan history
-    const { data: scanData, error: scanError } = await supabase
-      .from('scan_history')
-      .select('*')
-      .eq('user_id', window.auth.currentUser().id)
-      .order('created_at', { ascending: false })
-      .limit(50);
-    
-    if (scanError) throw scanError;
-    
-    // Fetch health goals
-    const { data: goalData, error: goalError } = await supabase
-      .from('health_goals')
-      .select('*')
-      .eq('user_id', window.auth.currentUser().id)
-      .order('created_at', { ascending: false });
-    
-    if (goalError) throw goalError;
-    
-    // Fetch profile for scans remaining
-    const { data: profileData, error: profileError } = await supabase
-      .from('profiles')
-      .select('scans_remaining')
-      .eq('id', window.auth.currentUser().id)
-      .single();
-    
-    if (profileError && profileError.code !== 'PGRST116') throw profileError;
-    
+    // Read from local store (synced with MantleDB)
+    const scanData = window.store.getScans();
+    const goalData = window.store.getGoals();
+    const profileData = window.auth.userProfile() || { scans_remaining: 0 };
+
     // Store data for UI update
     userDashboardData = {
       scans: scanData || [],
       goals: goalData || [],
-      profile: profileData || { scans_remaining: 0 }
+      profile: profileData
     };
-    
+
     // Update global variable for user health goals
     userHealthGoals = goalData?.map(g => ({
       id: g.id,
@@ -1744,7 +1710,7 @@ async function fetchDashboardData() {
       notes: g.notes,
       progress: g.progress
     })) || [];
-    
+
     return userDashboardData;
     
   } catch (error) {
@@ -2009,39 +1975,18 @@ async function saveGoal() {
     const timeline = document.getElementById('goal-timeline').value;
     const notes = document.getElementById('goal-notes').value;
     
-    if (!window.auth.currentUser()) {
-      alert('You must be logged in to save goals.');
-      return;
-    }
-    
-    // Check for duplicate goal prevention
-    const { data: existingGoals, error: checkError } = await supabase
-      .from('health_goals')
-      .select('id')
-      .eq('user_id', window.auth.currentUser().id)
-      .eq('goal_type', goalType)
-      .eq('target', target);
-      
-    if (checkError) throw checkError;
-    
-    // If duplicate found, alert and exit
-    if (existingGoals && existingGoals.length > 0) {
+    const result = window.store.addGoal({
+      goal_type: goalType,
+      target: target,
+      timeline: timeline,
+      notes: notes,
+      progress: 0
+    });
+
+    if (!result.ok && result.duplicate) {
       alert('You already have this goal in your dashboard.');
       return;
     }
-    
-    const { data, error } = await supabase
-      .from('health_goals')
-      .insert([{
-        user_id: window.auth.currentUser().id,
-        goal_type: goalType,
-        target: target,
-        timeline: timeline,
-        notes: notes,
-        progress: 0
-      }]);
-    
-    if (error) throw error;
     
     // Close modal
     const goalModal = document.getElementById('add-goal-modal');
@@ -2067,12 +2012,7 @@ async function deleteGoal(goalId) {
   }
   
   try {
-    const { error } = await supabase
-      .from('health_goals')
-      .delete()
-      .eq('id', goalId);
-    
-    if (error) throw error;
+    window.store.deleteGoal(goalId);
     
     // Remove from UI
     const goalCard = document.getElementById(`goal-${goalId}`);
@@ -2116,18 +2056,18 @@ function toggleTheme() {
 // Load ads
 async function loadAds() {
   try {
-    // Get active ads for each placement
-    const { data, error } = await supabase
-      .from('ads')
-      .select('*')
-      .eq('active', true)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error loading ads:', error);
-      return;
+    // Get active ads (optional — managed via MantleDB "ads/placements")
+    let data = [];
+    try {
+      const adsRes = await fetch(`${MANTLE_BASE}/${MANTLE_NS}/ads/placements`);
+      if (adsRes.ok) {
+        const stored = await adsRes.json();
+        data = (stored && Array.isArray(stored.ads) ? stored.ads : []).filter(ad => ad && ad.active);
+      }
+    } catch (e) {
+      // No ads configured — that's fine
     }
-    
+
     if (!data || data.length === 0) {
       return;
     }
@@ -2218,22 +2158,8 @@ async function loadAds() {
 
 // Log ad impression
 async function logAdImpression(adId) {
-  if (!window.auth.currentUser()) return;
-  
   try {
-    await supabase
-      .from('ads')
-      .update({ impressions: supabase.rpc('increment', { count: 1 }) })
-      .eq('id', adId);
-    
-    // Also log in analytics
-    await supabase
-      .from('analytics')
-      .insert([{
-        user_id: window.auth.currentUser().id,
-        event_type: 'ad_impression',
-        event_data: { ad_id: adId }
-      }]);
+    window.store.trackStat('ad_impressions');
   } catch (error) {
     console.error('Error logging ad impression:', error);
   }
@@ -2241,22 +2167,8 @@ async function logAdImpression(adId) {
 
 // Log ad click
 async function logAdClick(adId) {
-  if (!window.auth.currentUser()) return;
-  
   try {
-    await supabase
-      .from('ads')
-      .update({ clicks: supabase.rpc('increment', { count: 1 }) })
-      .eq('id', adId);
-    
-    // Also log in analytics
-    await supabase
-      .from('analytics')
-      .insert([{
-        user_id: window.auth.currentUser().id,
-        event_type: 'ad_click',
-        event_data: { ad_id: adId }
-      }]);
+    window.store.trackStat('ad_clicks');
   } catch (error) {
     console.error('Error logging ad click:', error);
   }

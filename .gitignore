@@ -1,0 +1,9 @@
+# Local debug artifacts (Lightpanda debugging harnesses)
+debug.html
+debug2.html
+debug3.html
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.log

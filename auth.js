@@ -1,738 +1,277 @@
-// Supabase initialization
-const supabaseUrl = 'https://wefdmpmdyquuspucxpnn.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndlZmRtcG1keXF1dXNwdWN4cG5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA5MTU2MDMsImV4cCI6MjA1NjQ5MTYwM30.Lhn5TRevwGosKH05m2D9UoNWtw0uVq-WDGDhliY8gzg';
-const supabase = supabaseClient.createClient(supabaseUrl, supabaseKey);
+// ============================================================
+// CalcuBite — no-login identity, limits & cloud storage
+// ------------------------------------------------------------
+// • No signup / no login: every visitor gets an anonymous
+//   device identity stored in localStorage.
+// • Profile + scan limits are local-first (localStorage).
+// • Scan history, health goals and app stats are synced to
+//   MantleDB (https://mantledb.sh) — free anonymous JSON store.
+// • AI is provided by Puter.js (https://puter.com) — keyless.
+// ============================================================
 
-// DOM elements
-const authContainer = document.getElementById('auth-container');
-const appContainer = document.getElementById('app-container');
-const loginTemplate = document.getElementById('login-template');
-const registerTemplate = document.getElementById('register-template');
-const resetPasswordTemplate = document.getElementById('reset-password-template');
-const userProfileElem = document.getElementById('user-profile');
-const userNameElem = document.getElementById('user-name');
-const userAvatarElem = document.getElementById('user-avatar');
-const userTierElem = document.getElementById('user-tier');
-const adminLinkElem = document.getElementById('admin-link');
-const premiumNotification = document.getElementById('premium-notification');
+const MANTLE_BASE = 'https://mantledb.sh/v2';
+const MANTLE_NS = 'calcubite';
+// Write key for the claimed "calcubite" namespace. This is a
+// client-side app, so the key is intentionally public; it only
+// allows writing inside this namespace.
+const MANTLE_KEY = '1d9900af5d44ffcdbd2a9cd7c6015428e1af5325ed8dbac23cded566acbb09c2';
+const DAILY_FREE_SCANS = 5;
 
-// Global user state
-let currentUser = null;
-let userProfile = null;
-let lastAdWatched = null;
+// DOM references (may be null until DOMContentLoaded)
+let appContainer, userProfileElem, userNameElem, userAvatarElem, userTierElem, premiumNotification;
 
-// Authentication state
-async function checkAuth() {
-  const { data, error } = await supabase.auth.getSession();
-  
-  if (error) {
-    console.error('Error checking authentication:', error);
-    showLandingPage();
-    return false;
-  }
-  
-  if (data.session) {
-    currentUser = data.session.user;
-    await fetchUserProfile();
-    updateUIForUser();
-    return true;
-  } else {
-    showLandingPage();
-    return false;
-  }
-}
-
-// Fetch user profile data
-async function fetchUserProfile() {
-  if (!currentUser) return;
-  
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', currentUser.id)
-    .single();
-  
-  if (error) {
-    console.error('Error fetching user profile:', error);
-    
-    // If profile doesn't exist, create it
-    if (error.code === 'PGRST116') {
-      await createUserProfile();
+// ------------------------------------------------------------
+// MantleDB helpers
+// ------------------------------------------------------------
+async function mantleFetch(path, options = {}) {
+  const res = await fetch(`${MANTLE_BASE}/${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Mantle-Key': MANTLE_KEY,
+      ...(options.headers || {})
     }
-    return;
-  }
-  
-  userProfile = data;
-  lastAdWatched = data.last_ad_watched;
+  });
+  if (!res.ok) throw new Error(`MantleDB ${res.status}`);
+  return res.json();
 }
 
-// Create new user profile
-async function createUserProfile() {
-  if (!currentUser) return null;
-  
+const mantleWrite = (path, data) => mantleFetch(path, { method: 'POST', body: JSON.stringify(data) });
+const mantleRead = (path) => mantleFetch(path, { method: 'GET' });
+const mantleIncrement = (path, key) => mantleFetch(`increment/${path}`, { method: 'POST', body: JSON.stringify({ key }) });
+
+// ------------------------------------------------------------
+// Anonymous device identity (replaces Supabase auth)
+// ------------------------------------------------------------
+function getDeviceId() {
+  let id = localStorage.getItem('cb_device_id');
+  if (!id) {
+    id = (window.crypto && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : 'dev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem('cb_device_id', id);
+  }
+  return id;
+}
+
+const deviceId = getDeviceId();
+const currentUser = { id: deviceId, email: '' };
+
+// ------------------------------------------------------------
+// Profile — local-first
+// ------------------------------------------------------------
+function loadProfile() {
   try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .insert([{
-        id: currentUser.id,
-        full_name: currentUser.user_metadata?.full_name || 'User',
-        avatar_url: currentUser.user_metadata?.avatar_url || null,
-        email: currentUser.email,
-        is_admin: false,
-        scans_remaining: 5,
-        last_scan_reset: new Date().toISOString()
-      }])
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating user profile:', error);
-      return null;
-    }
-    
-    userProfile = data;
-    return data;
-  } catch (err) {
-    console.error('Exception creating user profile:', err);
-    return null;
-  }
+    const p = JSON.parse(localStorage.getItem('cb_profile'));
+    if (p && typeof p === 'object') return p;
+  } catch (e) { /* corrupted profile, reset */ }
+  return {
+    full_name: 'Guest',
+    avatar_url: '',
+    scans_remaining: DAILY_FREE_SCANS,
+    last_scan_reset: new Date().toISOString()
+  };
 }
 
-// Update UI for authenticated user
+let userProfile = loadProfile();
+
+function saveProfileLocal() {
+  localStorage.setItem('cb_profile', JSON.stringify(userProfile));
+}
+
+function persistProfileCloud() {
+  mantleWrite(`users/${deviceId}/profile`, { ...userProfile, device_id: deviceId })
+    .catch(() => { /* offline is fine — local is source of truth */ });
+}
+
+// ------------------------------------------------------------
+// Cloud-backed data store (scan history + health goals)
+// ------------------------------------------------------------
+let scanHistory = [];
+let healthGoals = [];
+
+async function loadUserData() {
+  try {
+    const h = await mantleRead(`users/${deviceId}/history`);
+    if (h && Array.isArray(h.scans)) scanHistory = h.scans;
+  } catch (e) { /* no history yet */ }
+  try {
+    const g = await mantleRead(`users/${deviceId}/goals`);
+    if (g && Array.isArray(g.goals)) healthGoals = g.goals;
+  } catch (e) { /* no goals yet */ }
+}
+
+function persistHistory() {
+  const slim = scanHistory.slice(0, 50);
+  mantleWrite(`users/${deviceId}/history`, { scans: slim, updated_at: new Date().toISOString() })
+    .catch((e) => console.warn('History sync failed:', e.message));
+}
+
+function persistGoals() {
+  mantleWrite(`users/${deviceId}/goals`, { goals: healthGoals, updated_at: new Date().toISOString() })
+    .catch((e) => console.warn('Goals sync failed:', e.message));
+}
+
+function makeId() {
+  return (window.crypto && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+
+// Data API consumed by script.js
+window.store = {
+  addScan(scan) {
+    const entry = {
+      id: makeId(),
+      created_at: new Date().toISOString(),
+      scan_type: scan.scan_type || 'food',
+      scan_data: scan.scan_data || {}
+    };
+    scanHistory.unshift(entry);
+    scanHistory = scanHistory.slice(0, 50);
+    persistHistory();
+    return entry;
+  },
+  getScans: () => scanHistory.slice(),
+  getGoals: () => healthGoals.slice(),
+  addGoal(goal) {
+    const duplicate = healthGoals.some(
+      (g) => g.goal_type === goal.goal_type && g.target === goal.target
+    );
+    if (duplicate) return { ok: false, duplicate: true };
+    healthGoals.unshift({
+      id: makeId(),
+      created_at: new Date().toISOString(),
+      progress: 0,
+      ...goal
+    });
+    persistGoals();
+    return { ok: true };
+  },
+  deleteGoal(id) {
+    healthGoals = healthGoals.filter((g) => g.id !== id);
+    persistGoals();
+  },
+  updateGoal(id, patch) {
+    healthGoals = healthGoals.map((g) => (g.id === id ? { ...g, ...patch } : g));
+    persistGoals();
+  },
+  trackStat(key) {
+    mantleIncrement(`stats/app`, key).catch(() => { /* non-critical */ });
+  }
+};
+
+// ------------------------------------------------------------
+// UI helpers
+// ------------------------------------------------------------
+function bindDomRefs() {
+  appContainer = document.getElementById('app-container');
+  userProfileElem = document.getElementById('user-profile');
+  userNameElem = document.getElementById('user-name');
+  userAvatarElem = document.getElementById('user-avatar');
+  userTierElem = document.getElementById('user-tier');
+  premiumNotification = document.getElementById('premium-notification');
+}
+
 function updateUIForUser() {
-  // Hide landing page if visible
-  const landingPage = document.getElementById('landing-page');
-  if (landingPage) {
-    landingPage.style.display = 'none';
+  if (userNameElem) userNameElem.textContent = userProfile.full_name || 'Guest';
+  if (userAvatarElem) {
+    userAvatarElem.src = userProfile.avatar_url ||
+      `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfile.full_name || 'Guest')}&background=random`;
   }
-  document.body.classList.remove('landing-mode');
-  
-  // Show app container, hide auth container
-  authContainer.style.display = 'none';
-  appContainer.style.display = 'block';
-  
-  // Update user info in UI
-  userNameElem.textContent = userProfile?.full_name || currentUser.email.split('@')[0];
-  
-  if (userProfile?.avatar_url) {
-    userAvatarElem.src = userProfile.avatar_url;
-  } else {
-    userAvatarElem.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userNameElem.textContent)}&background=random`;
-  }
-  
-  // Show admin link if user is admin but don't rely only on frontend permission
-  if (adminLinkElem) {
-    if (userProfile?.is_admin) {
-      adminLinkElem.style.display = 'flex';
-    } else {
-      adminLinkElem.style.display = 'none';
-    }
-  }
-  
-  // Check if features should be unlocked by ad viewing
-  checkAdUnlock();
+  if (userTierElem) userTierElem.textContent = 'Free';
+  if (userProfileElem) userProfileElem.style.display = 'flex';
 }
 
-// Check if user has watched an ad recently
-function checkAdUnlock() {
-  if (!premiumNotification) return;
-  
-  const now = new Date();
-  const adWatchedTime = lastAdWatched ? new Date(lastAdWatched) : null;
-  
-  // Ad unlocks features for 24 hours
-  if (adWatchedTime && ((now - adWatchedTime) / (1000 * 60 * 60)) < 24) {
-    premiumNotification.style.display = 'none';
-  } else {
-    premiumNotification.style.display = 'flex';
-  }
-}
+// No login anymore: go straight into the app.
+async function checkAuth() {
+  bindDomRefs();
 
-// Show the landing page
-function showLandingPage() {
   const landingPage = document.getElementById('landing-page');
-  const appContainer = document.getElementById('app-container');
   const authContainer = document.getElementById('auth-container');
-  
-  if (landingPage) {
-    landingPage.style.display = 'block';
-    appContainer.style.display = 'none';
-    authContainer.style.display = 'none';
-    document.body.classList.add('landing-mode');
-  } else {
-    showLoginForm();
-  }
-}
-
-// Show the login form
-function showLoginForm() {
-  const landingPage = document.getElementById('landing-page');
-  if (landingPage) {
-    landingPage.style.display = 'none';
-  }
-  
-  authContainer.style.display = 'flex';
-  appContainer.style.display = 'none';
+  if (landingPage) landingPage.style.display = 'none';
+  if (authContainer) authContainer.style.display = 'none';
+  if (appContainer) appContainer.style.display = 'block';
   document.body.classList.remove('landing-mode');
-  
-  // Clone template content
-  const template = document.getElementById('login-template');
-  if (!template) {
-    console.error('Login template not found');
-    return;
-  }
-  
-  const content = document.importNode(template.content, true);
-  authContainer.innerHTML = '';
-  authContainer.appendChild(content);
-  
-  // Add event listeners
-  const loginForm = document.getElementById('login-form');
-  const registerLink = document.getElementById('register-link');
-  const forgotPasswordLink = document.getElementById('forgot-password-link');
-  const googleLoginBtn = document.getElementById('google-login');
-  
-  if (loginForm) loginForm.addEventListener('submit', handleLogin);
-  if (registerLink) registerLink.addEventListener('click', showRegisterForm);
-  if (forgotPasswordLink) forgotPasswordLink.addEventListener('click', showResetPasswordForm);
-  if (googleLoginBtn) googleLoginBtn.addEventListener('click', handleGoogleLogin);
-  
-  // Password visibility toggle
-  const togglePassword = document.querySelector('.toggle-password');
-  const passwordInput = document.getElementById('login-password');
-  
-  if (togglePassword && passwordInput) {
-    togglePassword.addEventListener('click', () => {
-      const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-      passwordInput.setAttribute('type', type);
-      togglePassword.classList.toggle('fa-eye');
-      togglePassword.classList.toggle('fa-eye-slash');
-    });
-  }
+
+  updateUIForUser();
+  loadUserData(); // fire-and-forget cloud load
 }
 
-// Show the register form
-function showRegisterForm(e) {
-  if (e) e.preventDefault();
-  
-  const landingPage = document.getElementById('landing-page');
-  if (landingPage) {
-    landingPage.style.display = 'none';
-  }
-  
-  authContainer.style.display = 'flex';
-  appContainer.style.display = 'none';
-  document.body.classList.remove('landing-mode');
-  
-  // Clone template content
-  const content = document.importNode(registerTemplate.content, true);
-  authContainer.innerHTML = '';
-  authContainer.appendChild(content);
-  
-  // Add event listeners
-  document.getElementById('register-form').addEventListener('submit', handleRegister);
-  document.getElementById('login-link').addEventListener('click', showLoginForm);
-  document.getElementById('google-register').addEventListener('click', handleGoogleLogin);
-  
-  // Password visibility toggle
-  const togglePassword = document.querySelector('.toggle-password');
-  const passwordInput = document.getElementById('register-password');
-  
-  togglePassword.addEventListener('click', () => {
-    const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-    passwordInput.setAttribute('type', type);
-    togglePassword.classList.toggle('fa-eye');
-    togglePassword.classList.toggle('fa-eye-slash');
-  });
-  
-  // Password strength meter
-  const strengthBar = document.getElementById('strength-bar');
-  const strengthText = document.getElementById('strength-text');
-  
-  passwordInput.addEventListener('input', () => {
-    const password = passwordInput.value;
-    const strength = calculatePasswordStrength(password);
-    
-    strengthBar.style.width = `${strength.score * 25}%`;
-    strengthBar.style.backgroundColor = strength.color;
-    strengthText.textContent = strength.label;
-    strengthText.style.color = strength.color;
-  });
+// Kept for backward compatibility with old call sites.
+function showLandingPage() { checkAuth(); }
+
+// ------------------------------------------------------------
+// Scan limits (freemium) — local-first
+// ------------------------------------------------------------
+function adUnlimitedActive() {
+  const t = localStorage.getItem('cb_last_ad');
+  return !!t && (Date.now() - new Date(t).getTime()) < 24 * 60 * 60 * 1000;
 }
 
-// Show the reset password form
-function showResetPasswordForm(e) {
-  if (e) e.preventDefault();
-  
-  // Clone template content
-  const content = document.importNode(resetPasswordTemplate.content, true);
-  authContainer.innerHTML = '';
-  authContainer.appendChild(content);
-  
-  // Add event listeners
-  document.getElementById('reset-form').addEventListener('submit', handleResetPassword);
-  document.getElementById('back-to-login-link').addEventListener('click', showLoginForm);
-}
-
-// Handle login form submission
-async function handleLogin(e) {
-  e.preventDefault();
-  
-  const email = document.getElementById('login-email').value;
-  const password = document.getElementById('login-password').value;
-  const rememberMe = document.getElementById('remember-me').checked;
-  const errorElement = document.getElementById('login-error');
-  
-  try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-      options: {
-        persistSession: rememberMe
-      }
-    });
-    
-    if (error) throw error;
-    
-    currentUser = data.user;
-    await fetchUserProfile();
-    updateUIForUser();
-    
-  } catch (error) {
-    errorElement.style.display = 'block';
-    errorElement.textContent = error.message || 'Failed to login. Please try again.';
-  }
-}
-
-// Handle register form submission
-async function handleRegister(e) {
-  e.preventDefault();
-  
-  const fullName = document.getElementById('register-name').value;
-  const email = document.getElementById('register-email').value;
-  const password = document.getElementById('register-password').value;
-  const termsAgreed = document.getElementById('terms-agree').checked;
-  const errorElement = document.getElementById('register-error');
-  
-  if (!termsAgreed) {
-    errorElement.style.display = 'block';
-    errorElement.textContent = 'You must agree to the Terms of Service and Privacy Policy.';
-    return;
-  }
-  
-  try {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName
-        },
-        emailRedirectTo: window.location.origin
-      }
-    });
-    
-    if (error) throw error;
-    
-    // Show success message
-    errorElement.style.display = 'block';
-    errorElement.textContent = 'Registration successful! Please check your email to confirm your account.';
-    errorElement.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
-    errorElement.style.color = 'var(--success)';
-    
-    // Redirect to login after a delay
-    setTimeout(() => {
-      showLoginForm();
-    }, 3000);
-    
-  } catch (error) {
-    errorElement.style.display = 'block';
-    errorElement.textContent = error.message || 'Failed to register. Please try again.';
-  }
-}
-
-// Handle password reset request
-async function handleResetPassword(e) {
-  e.preventDefault();
-  
-  const email = document.getElementById('reset-email').value;
-  const errorElement = document.getElementById('reset-error');
-  const successElement = document.getElementById('reset-success');
-  
-  try {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}`,
-    });
-    
-    if (error) throw error;
-    
-    // Show success message
-    if (successElement) {  
-      successElement.style.display = 'block';
-      successElement.textContent = 'Password reset link sent! Please check your email.';
-    }
-    
-  } catch (error) {
-    if (errorElement) {  
-      errorElement.style.display = 'block';
-      errorElement.textContent = error.message || 'Failed to send reset link. Please try again.';
-    }
-  }
-}
-
-// Handle Google login
-async function handleGoogleLogin() {
-  try {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin
-      }
-    });
-    
-    if (error) throw error;
-    
-  } catch (error) {
-    console.error('Google login error:', error);
-    alert('Failed to login with Google. Please try again.');
-  }
-}
-
-// Handle logout
-async function handleLogout() {
-  try {
-    await supabase.auth.signOut();
-    currentUser = null;
-    userProfile = null;
-    showLoginForm();
-  } catch (error) {
-    console.error('Logout error:', error);
-    alert('Failed to logout. Please try again.');
-  }
-}
-
-// Calculate password strength
-function calculatePasswordStrength(password) {
-  if (!password) {
-    return { score: 0, label: 'Password strength', color: 'var(--text-tertiary)' };
-  }
-  
-  let score = 0;
-  
-  // Length check
-  if (password.length > 6) score += 1;
-  if (password.length > 10) score += 1;
-  
-  // Complexity checks
-  if (/[A-Z]/.test(password)) score += 1;
-  if (/[0-9]/.test(password)) score += 1;
-  if (/[^A-Za-z0-9]/.test(password)) score += 1;
-  
-  // Determine label and color
-  let label, color;
-  
-  switch (score) {
-    case 0:
-    case 1:
-      label = 'Weak';
-      color = 'var(--danger)';
-      break;
-    case 2:
-    case 3:
-      label = 'Medium';
-      color = 'var(--warning)';
-      break;
-    case 4:
-      label = 'Strong';
-      color = 'var(--success)';
-      break;
-    case 5:
-      label = 'Very Strong';
-      color = 'var(--success)';
-      break;
-  }
-  
-  return { score: score, label, color };
-}
-
-// Watch ad to unlock premium features temporarily
-async function watchAd() {
-  try {
-    const adModal = document.getElementById('ad-modal');
-    
-    if (!adModal) {
-      console.error('Ad modal element not found');
-      return;
-    }
-    
-    const adTimerElement = document.getElementById('ad-timer');
-    const skipButton = document.getElementById('ad-skip-button');
-    const skipTimerElement = document.getElementById('skip-timer');
-    
-    if (!adTimerElement || !skipButton || !skipTimerElement) {
-      console.error('Ad elements not found');
-      return;
-    }
-    
-    // Show ad modal
-    adModal.style.display = 'block';
-  
-    // Simulate ad playback
-    let adDuration = 10; 
-    let skipDuration = 3; 
-    
-    // Update ad timer every second
-    const adInterval = setInterval(() => {
-      adTimerElement.textContent = `${adDuration}s`;
-      adDuration--;
-      
-      if (adDuration < 0) {
-        clearInterval(adInterval);
-        completeAd();
-      }
-    }, 1000);
-    
-    // Update skip timer
-    const skipInterval = setInterval(() => {
-      skipTimerElement.textContent = skipDuration;
-      skipDuration--;
-      
-      if (skipDuration < 0) {
-        clearInterval(skipInterval);
-        skipButton.disabled = false;
-        skipButton.textContent = 'Skip Ad';
-      }
-    }, 1000);
-    
-    // Skip button event
-    skipButton.addEventListener('click', function skipHandler() {
-      if (!skipButton.disabled) {
-        clearInterval(adInterval);
-        clearInterval(skipInterval);
-        skipButton.removeEventListener('click', skipHandler);
-        completeAd();
-      }
-    });
-    
-    // Complete ad function
-    async function completeAd() {
-      // Hide ad modal
-      adModal.style.display = 'none';
-      
-      // Update user profile
-      lastAdWatched = new Date().toISOString();
-      
-      // Update in database
-      if (currentUser) {
-        const { error } = await supabase
-          .from('profiles')
-          .update({ 
-            last_ad_watched: lastAdWatched,
-            scans_remaining: 999 
-          })
-          .eq('id', currentUser.id);
-        
-        if (error) {
-          console.error('Error updating ad watched time:', error);
-        }
-        
-        // Update analytics
-        try {
-          const { error: analyticsError } = await supabase
-            .from('analytics')
-            .insert([{
-              user_id: currentUser.id,
-              event_type: 'ad_watched',
-              event_data: {}
-            }]);
-          
-          if (analyticsError) {
-            console.error('Error logging analytics:', analyticsError);
-          }
-        } catch (analyticsEx) {
-          console.error('Exception logging analytics:', analyticsEx);
-        }
-      }
-      
-      // Update local user profile
-      if (userProfile) {
-        userProfile.last_ad_watched = lastAdWatched;
-        userProfile.scans_remaining = 999; 
-      }
-      
-      // Hide premium notification
-      const premiumNotification = document.getElementById('premium-notification');
-      if (premiumNotification) {
-        premiumNotification.style.display = 'none';
-      }
-      
-      // Show success notification
-      alert('Thank you for watching! Unlimited scans unlocked for 24 hours.');
-    }
-  } catch (error) {
-    console.error('Error showing ad:', error);
-    alert('An error occurred while trying to show the ad. Please try again.');
-  }
-}
-
-// Reset user's scan count after watching an ad
-async function resetScansAfterAd() {
-  if (!currentUser) return false;
-  
-  try {
-    // Get the system settings to determine max scans
-    const { data: settingsData, error: settingsError } = await supabase
-      .from('system_settings')
-      .select('free_scans_per_day')
-      .single();
-    
-    const defaultScans = 5;
-    const maxScans = settingsData?.free_scans_per_day || defaultScans;
-    
-    // Update the user's scans_remaining to max value
-    const { error } = await supabase
-      .from('profiles')
-      .update({ scans_remaining: 999 }) 
-      .eq('id', currentUser.id);
-    
-    if (error) {
-      console.error('Error resetting scans count:', error);
-      return false;
-    }
-    
-    // Update local user profile
-    if (userProfile) {
-      userProfile.scans_remaining = 999;
-    }
-    
-    return true;
-  } catch (error) {
-    console.error('Error in resetScansAfterAd:', error);
-    return false;
-  }
-}
-
-// Update scans remaining for user
 async function updateScansRemaining(scansUsed = 1) {
-  if (!currentUser) return true;
-  
-  // Check if user profile exists
-  if (!userProfile) {
-    await fetchUserProfile();
-    // Create profile if it doesn't exist
-    if (!userProfile) {
-      userProfile = await createUserProfile();
-      if (!userProfile) return false;
-    }
+  // Watching an ad unlocks scans for 24 hours
+  if (adUnlimitedActive()) return true;
+
+  if (typeof userProfile.scans_remaining !== 'number') {
+    userProfile.scans_remaining = DAILY_FREE_SCANS;
   }
-  
-  // Ensure scans_remaining has a valid value
-  if (!userProfile.scans_remaining && userProfile.scans_remaining !== 0) {
-    userProfile.scans_remaining = 5;
-  }
-  
+
   if (userProfile.scans_remaining <= 0) {
-    // Out of scans, show notification
     if (premiumNotification) premiumNotification.style.display = 'flex';
     return false;
   }
-  
-  const newScansRemaining = userProfile.scans_remaining - scansUsed;
-  
-  try {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ scans_remaining: newScansRemaining })
-      .eq('id', currentUser.id);
-    
-    if (error) throw error;
-    
-    userProfile.scans_remaining = newScansRemaining;
-    return true;
-  } catch (error) {
-    console.error('Error updating scans remaining:', error);
-    return false;
-  }
-}
 
-// Reset daily scan count
-async function resetDailyScanCount() {
-  if (!currentUser) return;
-  
-  const lastReset = new Date(userProfile.last_scan_reset);
-  const now = new Date();
-  const dayDiff = Math.floor((now - lastReset) / (1000 * 60 * 60 * 24));
-  
-  if (dayDiff >= 1) {
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        scans_remaining: 5, 
-        last_scan_reset: now.toISOString()
-      })
-      .eq('id', currentUser.id);
-    
-    if (error) {
-      console.error('Error resetting scan count:', error);
-      return;
-    }
-    
-    userProfile.scans_remaining = 5;
-    userProfile.last_scan_reset = now.toISOString();
-  }
-}
-
-// Update user profile
-async function updateProfile(profileData) {
-  if (!currentUser) return;
-  
-  const { error } = await supabase
-    .from('profiles')
-    .update(profileData)
-    .eq('id', currentUser.id);
-  
-  if (error) {
-    console.error('Error updating profile:', error);
-    return false;
-  }
-  
-  // Update local user profile data
-  userProfile = { ...userProfile, ...profileData };
-  updateUIForUser();
-  
+  userProfile.scans_remaining -= scansUsed;
+  saveProfileLocal();
+  persistProfileCloud();
   return true;
 }
 
-// Show profile modal
+async function resetDailyScanCount() {
+  const lastReset = new Date(userProfile.last_scan_reset || 0);
+  const now = new Date();
+  const dayDiff = Math.floor((now - lastReset) / (1000 * 60 * 60 * 24));
+
+  if (dayDiff >= 1) {
+    userProfile.scans_remaining = DAILY_FREE_SCANS;
+    userProfile.last_scan_reset = now.toISOString();
+    saveProfileLocal();
+    persistProfileCloud();
+  }
+}
+
+async function watchAd() {
+  // Simulated ad reward: unlocks scanning for the next 24 hours.
+  localStorage.setItem('cb_last_ad', new Date().toISOString());
+  userProfile.scans_remaining = DAILY_FREE_SCANS;
+  saveProfileLocal();
+  persistProfileCloud();
+  if (premiumNotification) premiumNotification.style.display = 'none';
+  window.store.trackStat('ads_watched');
+}
+
+// ------------------------------------------------------------
+// Profile update + modal
+// ------------------------------------------------------------
+async function updateProfile(profileData) {
+  userProfile = { ...userProfile, ...profileData };
+  saveProfileLocal();
+  persistProfileCloud();
+  updateUIForUser();
+  return true;
+}
+
 function showProfileModal() {
   const profileModal = document.getElementById('profile-modal');
   if (!profileModal) {
     console.error('Profile modal element not found');
     return;
   }
-  
-  // Ensure the user profile data is loaded before proceeding
-  if (!userProfile) {
-    fetchUserProfile().then(() => {
-      if (userProfile) {
-        populateProfileModal();
-      } else {
-        console.error('Failed to load user profile');
-        alert('Unable to load profile data. Please try again.');
-      }
-    }).catch(error => {
-      console.error('Error fetching profile data:', error);
-      alert('Unable to load profile data. Please try again.');
-    });
-  } else {
-    populateProfileModal();
-  }
-  
-  // Show modal
+  populateProfileModal();
   profileModal.style.display = 'block';
 }
 
-// Helper function to populate profile modal with data
 function populateProfileModal() {
   const nameInput = document.getElementById('profile-name');
   const emailInput = document.getElementById('profile-email');
@@ -742,25 +281,25 @@ function populateProfileModal() {
   const proPlan = document.getElementById('pro-plan');
   const currentPlanBtn = document.getElementById('current-plan-btn');
   const upgradePlanBtn = document.getElementById('upgrade-plan-btn');
-  
-  // Check if essential elements exist before proceeding
-  if (!nameInput || !emailInput) {
+
+  if (!nameInput) {
     console.error('Essential profile elements not found');
     return;
   }
-  
-  // Fill profile data
-  nameInput.value = userProfile?.full_name || '';
-  emailInput.value = currentUser?.email || '';
-  if (planInput) planInput.value = 'Free';
-  
-  if (userProfile?.avatar_url) {
-    avatarImg.src = userProfile.avatar_url;
-  } else {
-    avatarImg.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(nameInput.value)}&background=random`;
+
+  nameInput.value = userProfile.full_name || '';
+  if (emailInput) {
+    emailInput.value = '';
+    emailInput.placeholder = 'No account needed';
+    emailInput.disabled = true;
   }
-  
-  // Show/hide plan buttons based on current plan - with null checks
+  if (planInput) planInput.value = 'Free';
+
+  if (avatarImg) {
+    avatarImg.src = userProfile.avatar_url ||
+      `https://ui-avatars.com/api/?name=${encodeURIComponent(nameInput.value || 'Guest')}&background=random`;
+  }
+
   if (freePlan) freePlan.classList.add('active-plan');
   if (proPlan) proPlan.classList.remove('active-plan');
   if (currentPlanBtn) currentPlanBtn.style.display = 'none';
@@ -769,133 +308,51 @@ function populateProfileModal() {
     upgradePlanBtn.textContent = 'Watch Ad Now';
     upgradePlanBtn.disabled = false;
   }
-  
-  // Update ad rewards text
+
   const adRewardDesc = document.querySelector('.ad-setting-item:nth-child(2) p');
   if (adRewardDesc) {
     adRewardDesc.textContent = 'Watching an ad unlocks unlimited scans for 24 hours.';
   }
 
-  // Form submission
   const profileForm = document.getElementById('profile-form');
   if (profileForm) {
     profileForm.onsubmit = async (e) => {
       e.preventDefault();
-      
       const newName = nameInput.value.trim();
-      const newPassword = document.getElementById('profile-password')?.value.trim() || '';
-      
-      let updateData = {};
-      
-      if (newName && newName !== userProfile?.full_name) {
-        updateData.full_name = newName;
-      }
-      
-      // Update profile in supabase
-      if (Object.keys(updateData).length > 0) {
-        const success = await updateProfile(updateData);
-        
-        if (success) {
-          alert('Profile updated successfully!');
-        } else {
-          alert('Failed to update profile. Please try again.');
-        }
-      }
-      
-      // Update password if provided
-      if (newPassword) {
-        try {
-          const { error } = await supabase.auth.updateUser({
-            password: newPassword
-          });
-          
-          if (error) throw error;
-          
-          alert('Password updated successfully!');
-        } catch (error) {
-          alert(`Failed to update password: ${error.message}`);
-        }
+      if (newName && newName !== userProfile.full_name) {
+        const success = await updateProfile({ full_name: newName });
+        alert(success ? 'Profile updated successfully!' : 'Failed to update profile.');
       }
     };
   }
-  
-  // Change avatar
+
   const changeAvatarBtn = document.getElementById('change-avatar');
   if (changeAvatarBtn) {
     changeAvatarBtn.onclick = () => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      
-      input.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        if (file.size > 2 * 1024 * 1024) {
-          alert('File size must be less than 2MB');
-          return;
-        }
-        
-        try {
-          // Upload to supabase storage
-          const fileName = `avatar-${currentUser.id}-${Date.now()}`;
-          const { data, error } = await supabase.storage
-            .from('avatars')
-            .upload(fileName, file);
-          
-          if (error) throw error;
-          
-          // Get public URL
-          const { data: urlData } = await supabase.storage
-            .from('avatars')
-            .getPublicUrl(fileName);
-          
-          // Update profile with new avatar URL
-          const avatarUrl = urlData.publicUrl;
-          const success = await updateProfile({ avatar_url: avatarUrl });
-          
-          if (success) {
-            avatarImg.src = avatarUrl;
-            if (userAvatarElem) userAvatarElem.src = avatarUrl;
-          }
-          
-        } catch (error) {
-          alert(`Failed to upload avatar: ${error.message}`);
-        }
-      };
-      
-      input.click();
+      // No cloud file storage anymore — regenerate the avatar instead.
+      const url = `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfile.full_name || 'Guest')}&background=random&size=128`;
+      updateProfile({ avatar_url: url });
+      if (avatarImg) avatarImg.src = url;
+      if (userAvatarElem) userAvatarElem.src = url;
     };
   }
-  
-  // Upgrade plan button with null check
+
   if (upgradePlanBtn) {
-    upgradePlanBtn.onclick = () => {
-      watchAd();
-    };
+    upgradePlanBtn.onclick = () => watchAd();
   }
 }
 
-// Show upgrade modal
 function showUpgradeModal() {
-  watchAd(); 
+  watchAd();
 }
 
-// Initialize event listeners
+// ------------------------------------------------------------
+// Init
+// ------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
-  // Check authentication on page load
+  bindDomRefs();
   checkAuth();
-  
-  // Logout event
-  const logoutLink = document.getElementById('logout-link');
-  if (logoutLink) {
-    logoutLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      handleLogout();
-    });
-  }
-  
-  // Profile link
+
   const profileLink = document.getElementById('profile-link');
   if (profileLink) {
     profileLink.addEventListener('click', (e) => {
@@ -903,82 +360,46 @@ document.addEventListener('DOMContentLoaded', () => {
       showProfileModal();
     });
   }
-  
-  // Admin link
-  const adminLink = document.getElementById('admin-link');
-  if (adminLink) {
-    adminLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      if (window.admin && typeof window.admin.showAdminDashboard === 'function') {
-        window.admin.showAdminDashboard();
-      } else {
-        console.error('Admin functionality not available');
-      }
-    });
-  }
-  
-  // Watch ad button
+
   const watchAdButton = document.getElementById('watch-ad-button');
   if (watchAdButton) {
-    watchAdButton.addEventListener('click', () => {
-      watchAd();
-    });
+    watchAdButton.addEventListener('click', () => watchAd());
   }
-  
-  // Watch ad in profile modal
+
   const watchAdNow = document.getElementById('watch-ad-now');
   if (watchAdNow) {
-    watchAdNow.addEventListener('click', () => {
-      watchAd();
-    });
+    watchAdNow.addEventListener('click', () => watchAd());
   }
-  
+
   // Close modals when clicking outside
   window.addEventListener('click', (e) => {
-    const modals = document.querySelectorAll('.modal');
-    modals.forEach(modal => {
-      if (e.target === modal) {
-        modal.style.display = 'none';
-      }
+    document.querySelectorAll('.modal').forEach((modal) => {
+      if (e.target === modal) modal.style.display = 'none';
     });
   });
-  
+
   // Close buttons in modals
-  document.querySelectorAll('.close-modal').forEach(button => {
+  document.querySelectorAll('.close-modal').forEach((button) => {
     button.addEventListener('click', () => {
       const modal = button.closest('.modal');
-      modal.style.display = 'none';
+      if (modal) modal.style.display = 'none';
     });
   });
 });
 
-// Check for auth errors in URL hash on page load
-window.addEventListener('DOMContentLoaded', () => {
-  const hash = window.location.hash;
-  if (hash.includes('error=')) {
-    const params = new URLSearchParams(hash.substring(1));
-    const error = params.get('error');
-    const errorDescription = params.get('error_description');
-    
-    if (error === 'access_denied' && params.get('error_code') === 'otp_expired') {
-      showResetPasswordForm();
-      const errorElement = document.getElementById('reset-error');
-      if (errorElement) {
-        errorElement.style.display = 'block';
-        errorElement.textContent = 'Email confirmation link has expired. Please request a new one.';
-      }
-    }
-  }
-});
-
-// Export functions to be used in other scripts
+// ------------------------------------------------------------
+// Public API (same surface as before — consumed by script.js)
+// ------------------------------------------------------------
 window.auth = {
   checkAuth,
   updateScansRemaining,
   resetDailyScanCount,
   watchAd,
+  updateProfile,
+  showProfileModal,
+  showUpgradeModal,
   currentUser: () => currentUser,
   userProfile: () => userProfile,
-  isPremium: () => false, 
-  lastAdWatched: () => lastAdWatched
+  isPremium: () => false,
+  lastAdWatched: () => localStorage.getItem('cb_last_ad')
 };

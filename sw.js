@@ -1,12 +1,11 @@
 // Service Worker for CalcuBite AI PWA
-const CACHE_NAME = 'calcubite-ai-v1';
+const CACHE_NAME = 'calcubite-ai-v2';
 const urlsToCache = [
   '/',
   '/index.html',
   '/style.css',
   '/script.js',
   '/auth.js',
-  '/admin.js',
   '/manifest.json',
   '/6233209994745069536_120.jpg'
 ];
@@ -69,4 +68,4 @@ self.addEventListener('activate', event => {
       );
     })
   );
-}
+});
