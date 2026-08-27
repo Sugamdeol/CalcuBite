@@ -1,5 +1,5 @@
 // Service Worker for CalcuBite AI PWA
-const CACHE_NAME = 'calcubite-ai-v2';
+const CACHE_NAME = 'calcubite-ai-v3';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -12,6 +12,9 @@ const urlsToCache = [
 
 // Install event - cache resources
 self.addEventListener('install', event => {
+  // Activate the new service worker right away instead of waiting for
+  // every tab to close (ensures cache-busting updates propagate fast).
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
@@ -53,7 +56,7 @@ self.addEventListener('fetch', event => {
   );
 });
 
-// Activate event - clean up old caches
+// Activate event - clean up old caches, then take control of open tabs
 self.addEventListener('activate', event => {
   const cacheWhitelist = [CACHE_NAME];
   
@@ -66,6 +69,6 @@ self.addEventListener('activate', event => {
           }
         })
       );
-    })
+    }).then(() => clients.claim())
   );
 });
