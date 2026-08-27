@@ -26,6 +26,105 @@ const tabButtons = document.querySelectorAll('.tab-button');
 const tabContents = document.querySelectorAll('.tab-content');
 const macroSection = document.getElementById('macronutrient-section');
 
+// ============================================================
+// Pollinations.ai — free, keyless AI (no signup, no API key)
+// OpenAI-compatible endpoint. https://pollinations.ai
+// ============================================================
+const POLLINATIONS_URL = 'https://text.pollinations.ai/openai';
+
+async function pollinationsChat(messages, opts = {}) {
+  const body = {
+    model: opts.model || 'openai',
+    messages,
+    ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
+    ...(opts.max_tokens !== undefined ? { max_tokens: opts.max_tokens } : {})
+  };
+  const res = await fetch(POLLINATIONS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error('AI service error: HTTP ' + res.status);
+  const data = await res.json();
+  return (data && data.choices && data.choices[0] && data.choices[0].message)
+    ? data.choices[0].message.content : '';
+}
+
+// ============================================================
+// Personalized health advice (health profile + keyless AI)
+// ============================================================
+function buildHealthSummary(h) {
+  const facts = [];
+  if (h.age) facts.push(`Age: ${h.age}`);
+  if (h.sex) facts.push(`Sex: ${h.sex}`);
+  if (h.heightCm) facts.push(`Height: ${h.heightCm} cm`);
+  if (h.weightKg) facts.push(`Weight: ${h.weightKg} kg`);
+  if (h.activity) facts.push(`Activity level: ${h.activity}`);
+  if (h.goal) facts.push(`Primary goal: ${h.goal}`);
+  if (h.dietary) facts.push(`Dietary preferences/restrictions: ${h.dietary}`);
+  if (h.conditions) facts.push(`Health conditions: ${h.conditions}`);
+  return facts;
+}
+
+function renderAdviceText(text) {
+  const esc = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return esc
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^\s*[-*]\s+/gm, '\u2022 ')
+    .replace(/\n/g, '<br>');
+}
+
+async function handleHealthAdvice() {
+  const adviceModal = document.getElementById('advice-modal');
+  const adviceContent = document.getElementById('advice-content');
+  if (!adviceModal || !adviceContent) return;
+
+  // Save the latest form values, then generate advice from them
+  const health = window.auth.readHealthForm ? window.auth.readHealthForm()
+    : (window.auth.getHealth ? window.auth.getHealth() : {});
+  if (window.auth.updateProfile) {
+    await window.auth.updateProfile({ health });
+  }
+
+  const facts = buildHealthSummary(health);
+  adviceModal.style.display = 'block';
+  if (facts.length === 0) {
+    adviceContent.innerHTML = '<p>Please fill in a few health details first (age, goal, or conditions), then try again.</p>';
+    return;
+  }
+
+  adviceContent.innerHTML = '<div class="advice-loading"><div class="spinner"></div><p>Creating your personalized advice...</p></div>';
+
+  const prompt = `You are CalcuBite AI, a friendly, evidence-based nutrition and wellness coach.
+Here is the user's health profile:
+${facts.join('\n')}
+
+Write personalized, practical nutrition and lifestyle advice for this person. Include:
+1. A short overall assessment (include BMI if height and weight are provided).
+2. What to eat more of and what to limit, tailored to their goal, activity level, and any conditions.
+3. Three to five concrete, realistic daily habits they can start now.
+4. One important safety note if they listed a medical condition.
+
+Keep it warm, clear, and scannable with short sections and bullet points. Use **bold** for key points. Do not diagnose; remind them to consult a professional for medical conditions.`;
+
+  try {
+    const advice = await pollinationsChat(
+      [
+        { role: 'system', content: 'You are a supportive, evidence-based nutrition coach.' },
+        { role: 'user', content: prompt }
+      ],
+      { temperature: 0.6, max_tokens: 900 }
+    );
+    adviceContent.innerHTML = advice
+      ? `<div class="advice-text">${renderAdviceText(advice)}</div>`
+      : '<p>Sorry, I could not generate advice right now. Please try again.</p>';
+    if (window.store && window.store.trackStat) window.store.trackStat('advice');
+  } catch (err) {
+    adviceContent.innerHTML = '<p>Could not reach the AI service. Please check your connection and try again.</p>';
+  }
+}
+
 // Mode toggle functionality
 document.getElementById('labelMode').addEventListener('click', () => {
   currentMode = 'label';
@@ -238,6 +337,12 @@ async function analyzeImage(base64Image) {
   let systemPrompt;
   
   let goalContext = '';
+  // Personalize with the user's health profile (if they filled it in)
+  const healthProfile = window.auth.getHealth ? window.auth.getHealth() : {};
+  const healthFacts = buildHealthSummary(healthProfile);
+  if (healthFacts.length > 0) {
+    goalContext += 'The user has provided this health profile - tailor your analysis to them:\n' + healthFacts.join('\n') + '\n\n';
+  }
   if (userHealthGoals && userHealthGoals.length > 0) {
     goalContext = 'The user has the following health goals:\n';
     userHealthGoals.forEach(goal => {
@@ -483,10 +588,10 @@ Your response MUST be valid JSON with this structure:
       "Analyze this food image and provide detailed nutritional insights:" :
       "Analyze this food image from a fitness and workout perspective:");
   
-  // Puter.js AI call (keyless) — image analysis
-  let puterResponse;
+  // Pollinations.ai call (free, keyless) — image analysis
+  let aiContent;
   try {
-    puterResponse = await puter.ai.chat([
+    aiContent = await pollinationsChat([
       {
         role: "system",
         content: systemPrompt
@@ -504,15 +609,11 @@ Your response MUST be valid JSON with this structure:
           }
         ]
       }
-    ], { model: 'gpt-5-nano' });
+    ]);
   } catch (err) {
     throw new Error('AI service error: ' + (err.message || err));
   }
 
-  let aiContent = puterResponse && puterResponse.message ? puterResponse.message.content : '';
-  if (Array.isArray(aiContent)) {
-    aiContent = aiContent.map(p => (typeof p === 'string' ? p : (p.text || ''))).join('');
-  }
   if (typeof aiContent === 'string') {
     // Strip markdown code fences some models wrap JSON in
     aiContent = aiContent.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -1393,21 +1494,12 @@ If the user asks about something not related to nutrition or health, politely re
     
     messages.push(...conversationHistory);
     
-    // Make request to Puter.js AI (keyless)
-    let chatResponse;
+    // Make request to Pollinations.ai (free, keyless)
+    let aiResponse;
     try {
-      chatResponse = await puter.ai.chat(messages, {
-        model: 'gpt-5-nano',
-        temperature: 0.7,
-        max_tokens: 800
-      });
+      aiResponse = await pollinationsChat(messages, { temperature: 0.7, max_tokens: 800 });
     } catch (err) {
       throw new Error('AI service error: ' + (err.message || err));
-    }
-
-    let aiResponse = chatResponse && chatResponse.message ? chatResponse.message.content : '';
-    if (Array.isArray(aiResponse)) {
-      aiResponse = aiResponse.map(p => (typeof p === 'string' ? p : (p.text || ''))).join('');
     }
     aiResponse = aiResponse || "Sorry, I couldn't generate a response.";
     window.store.trackStat('chats');
@@ -2179,6 +2271,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const themeToggle = document.getElementById('theme-toggle');
   if (themeToggle) {
     themeToggle.addEventListener('click', toggleTheme);
+  }
+
+  // Personalized health advice button
+  const adviceBtn = document.getElementById('get-health-advice');
+  if (adviceBtn) {
+    adviceBtn.addEventListener('click', handleHealthAdvice);
   }
   
   // Hide macronutrient section initially

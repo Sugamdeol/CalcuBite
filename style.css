@@ -4,33 +4,34 @@
   --primary: #16a34a;
   --primary-light: #22c55e;
   --primary-dark: #15803d;
-  --secondary: #84cc16;
+  --secondary: #facc15;
   --success: #10b981; 
   --warning: #f59e0b;
   --danger: #ef4444;
   
   /* Base Colors */
-  --bg-primary: #f9fafb;
+  --bg-primary: #f6efe2;
   --bg-secondary: #ffffff;
-  --bg-tertiary: #f3f4f6;
+  --bg-tertiary: #ece2cd;
   
   /* Text Colors */
-  --text-primary: #111827;
-  --text-secondary: #374151;
-  --text-tertiary: #6b7280;
-  --text-light: #f9fafb;
+  --text-primary: #141414;
+  --text-secondary: #2b2b2b;
+  --text-tertiary: #525252;
+  --text-light: #ffffff;
   
   /* Border and Shadow */
-  --border-color: #e5e7eb;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --border-color: #141414;
+  --border-w: 2px;
+  --shadow-sm: 3px 3px 0 0 #141414;
+  --shadow-md: 4px 4px 0 0 #141414;
+  --shadow-lg: 6px 6px 0 0 #141414;
   
   /* Spacing and Size */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
+  --radius-sm: 0.4rem;
+  --radius-md: 0.65rem;
+  --radius-lg: 0.8rem;
+  --radius-xl: 0.9rem;
   --radius-full: 9999px;
   
   /* Animation */
@@ -50,18 +51,18 @@
   --primary-light: #86efac;
   --primary-dark: #22c55e;
   
-  --bg-primary: #111827;
-  --bg-secondary: #1f2937;
-  --bg-tertiary: #374151;
+  --bg-primary: #1c1813;
+  --bg-secondary: #262119;
+  --bg-tertiary: #332c21;
   
-  --text-primary: #f9fafb;
-  --text-secondary: #e5e7eb;
-  --text-tertiary: #d1d5db;
+  --text-primary: #f6efe2;
+  --text-secondary: #e8dfcd;
+  --text-tertiary: #c9bda3;
   
-  --border-color: #374151;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.15);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.15);
+  --border-color: #f6efe2;
+  --shadow-sm: 3px 3px 0 0 rgba(0,0,0,0.55);
+  --shadow-md: 4px 4px 0 0 rgba(0,0,0,0.55);
+  --shadow-lg: 6px 6px 0 0 rgba(0,0,0,0.55);
 }
 
 /* Reset and Base Styles */
@@ -3569,4 +3570,156 @@ input:checked + .slider:before {
     right: 10px;
     margin: 0;
   }
+}
+
+/* ============================================================
+   NEOBRUTALIST OVERRIDES
+   Bold borders, hard offset shadows, chunky typography.
+   ============================================================ */
+
+/* Chunkier, tighter headings */
+h1, h2, h3, h4 {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+/* Replace the gradient headline with solid, bold type */
+h1 {
+  background: none !important;
+  -webkit-background-clip: border-box !important;
+  background-clip: border-box !important;
+  color: var(--text-primary) !important;
+}
+
+/* Bordered, hard-shadowed surfaces */
+.input-panel,
+.results-panel,
+.modal-content,
+.ai-assistant,
+.user-dropdown {
+  border: var(--border-w) solid var(--border-color);
+  box-shadow: var(--shadow-md);
+  border-radius: var(--radius-lg);
+}
+
+/* Header + footer rules */
+.site-header {
+  border-bottom: var(--border-w) solid var(--border-color);
+  background: var(--bg-secondary);
+}
+.site-footer {
+  border-top: var(--border-w) solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+/* Chunky buttons with a press-in interaction */
+.primary-button,
+.secondary-button,
+.mode-button,
+.action-button,
+.tab-button,
+.theme-toggle,
+#ai-submit-button,
+.avatar-change,
+.watch-ad-button {
+  border: var(--border-w) solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+.primary-button:hover,
+.secondary-button:hover,
+.mode-button:hover,
+.action-button:hover,
+.tab-button:hover,
+#ai-submit-button:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: var(--shadow-md);
+}
+.primary-button:active,
+.secondary-button:active,
+.mode-button:active,
+.action-button:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 0 var(--border-color);
+}
+.mode-button.active,
+.tab-button.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* Inputs, selects, textareas */
+input, select, textarea {
+  border: var(--border-w) solid var(--border-color) !important;
+  border-radius: var(--radius-md) !important;
+  background: var(--bg-secondary);
+  font-weight: 500;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Badges */
+.feature-badge,
+.status-badge {
+  border: var(--border-w) solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-full);
+  font-weight: 700;
+}
+.feature-badge { background: var(--secondary); color: #141414; }
+
+/* Results sections as bold cards */
+.results-section {
+  border: var(--border-w) solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  padding: 1.25rem;
+}
+
+/* Chat bubbles */
+.chat-bubble {
+  border: var(--border-w) solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+.chat-avatar {
+  border: var(--border-w) solid var(--border-color);
+  background: var(--secondary);
+  color: #141414;
+}
+
+/* Camera + loading boxes */
+.camera-container,
+.camera-permission,
+.loading {
+  border: var(--border-w) solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+/* Health profile + advice */
+.health-section-title { margin-top: 1.5rem; }
+.health-hint {
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+  margin-bottom: 1rem;
+}
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.advice-content { font-weight: 500; line-height: 1.6; }
+.advice-text strong { font-weight: 800; }
+.advice-loading { display: flex; align-items: center; gap: 0.75rem; }
+
+/* Logo sits in a bordered tile */
+.logo {
+  border: var(--border-w) solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
 }

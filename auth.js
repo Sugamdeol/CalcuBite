@@ -6,7 +6,7 @@
 // • Profile is local-first (localStorage). Scans are unlimited — no ads.
 // • Scan history, health goals and app stats are synced to
 //   MantleDB (https://mantledb.sh) — free anonymous JSON store.
-// • AI is provided by Puter.js (https://puter.com) — keyless.
+// • AI is provided by Pollinations.ai (https://pollinations.ai) — free, keyless.
 // ============================================================
 
 const MANTLE_BASE = 'https://mantledb.sh/v2';
@@ -66,7 +66,8 @@ function loadProfile() {
   } catch (e) { /* corrupted profile, reset */ }
   return {
     full_name: 'Guest',
-    avatar_url: ''
+    avatar_url: '',
+    health: {}
   };
 }
 
@@ -228,8 +229,6 @@ function showProfileModal() {
 
 function populateProfileModal() {
   const nameInput = document.getElementById('profile-name');
-  const emailInput = document.getElementById('profile-email');
-  const planInput = document.getElementById('profile-plan');
   const avatarImg = document.getElementById('profile-avatar-img');
 
   if (!nameInput) {
@@ -238,27 +237,40 @@ function populateProfileModal() {
   }
 
   nameInput.value = userProfile.full_name || '';
-  if (emailInput) {
-    emailInput.value = '';
-    emailInput.placeholder = 'No account needed';
-    emailInput.disabled = true;
-  }
-  if (planInput) planInput.value = 'Free';
 
   if (avatarImg) {
     avatarImg.src = userProfile.avatar_url ||
       `https://ui-avatars.com/api/?name=${encodeURIComponent(nameInput.value || 'Guest')}&background=random`;
   }
 
+  // Populate health profile fields
+  const h = userProfile.health || {};
+  const healthValues = {
+    'health-age': h.age || '',
+    'health-sex': h.sex || '',
+    'health-height': h.heightCm || '',
+    'health-weight': h.weightKg || '',
+    'health-activity': h.activity || '',
+    'health-goal': h.goal || '',
+    'health-dietary': h.dietary || '',
+    'health-conditions': h.conditions || ''
+  };
+  Object.keys(healthValues).forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = healthValues[id];
+  });
+
   const profileForm = document.getElementById('profile-form');
   if (profileForm) {
     profileForm.onsubmit = async (e) => {
       e.preventDefault();
       const newName = nameInput.value.trim();
-      if (newName && newName !== userProfile.full_name) {
-        const success = await updateProfile({ full_name: newName });
-        alert(success ? 'Profile updated successfully!' : 'Failed to update profile.');
-      }
+      const health = collectHealthForm();
+      const success = await updateProfile({
+        full_name: newName || userProfile.full_name,
+        health
+      });
+      alert(success ? 'Profile saved!' : 'Failed to save profile.');
     };
   }
 
@@ -272,6 +284,24 @@ function populateProfileModal() {
       if (userAvatarElem) userAvatarElem.src = url;
     };
   }
+}
+
+// Read the health profile form values
+function collectHealthForm() {
+  const get = (id) => {
+    const el = document.getElementById(id);
+    return el ? el.value.trim() : '';
+  };
+  return {
+    age: get('health-age'),
+    sex: get('health-sex'),
+    heightCm: get('health-height'),
+    weightKg: get('health-weight'),
+    activity: get('health-activity'),
+    goal: get('health-goal'),
+    dietary: get('health-dietary'),
+    conditions: get('health-conditions')
+  };
 }
 
 // ------------------------------------------------------------
@@ -315,5 +345,7 @@ window.auth = {
   showProfileModal,
   currentUser: () => currentUser,
   userProfile: () => userProfile,
+  getHealth: () => userProfile.health || {},
+  readHealthForm: () => collectHealthForm(),
   isPremium: () => false
 };
