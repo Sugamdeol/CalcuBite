@@ -27,27 +27,71 @@ const tabContents = document.querySelectorAll('.tab-content');
 const macroSection = document.getElementById('macronutrient-section');
 
 // ============================================================
-// Pollinations.ai — free, keyless AI (no signup, no API key)
-// OpenAI-compatible endpoint. https://pollinations.ai
+// BazaarLink.ai — free OpenAI-compatible gateway (bazaarlink.ai/free)
+// Model: qwen/qwen3.7-flash:free (vision-capable, $0 per token)
+// Note: free tier has site-wide capacity limits, so we retry on 429.
 // ============================================================
-const POLLINATIONS_URL = 'https://text.pollinations.ai/openai';
+const BAZAARLINK_URL = 'https://api.bazaarlink.ai/v1/chat/completions';
+const BAZAARLINK_KEY = 'sk-bl-wYy2Sy3zL4BEfUAQ7u86aciXkl877ujeQRpRPR2g280YoEPR';
+const BAZAARLINK_MODEL = 'qwen/qwen3.7-flash:free';
 
-async function pollinationsChat(messages, opts = {}) {
+const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function aiChat(messages, opts = {}) {
   const body = {
-    model: opts.model || 'openai',
+    model: opts.model || BAZAARLINK_MODEL,
     messages,
-    ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
-    ...(opts.max_tokens !== undefined ? { max_tokens: opts.max_tokens } : {})
+    // Reasoning tokens count toward max_tokens, so keep the budget generous
+    max_tokens: opts.max_tokens || 8192,
+    ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {})
   };
-  const res = await fetch(POLLINATIONS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await sleepMs(attempt === 1 ? 4000 : 10000);
+    let res;
+    try {
+      res = await fetch(BAZAARLINK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': '***' + BAZAARLINK_KEY
+        },
+        body: JSON.stringify(body)
+      });
+    } catch (netErr) {
+      lastErr = netErr; // network failure -> retry
+      continue;
+    }
+    if (res.status === 429) { lastErr = new Error('busy'); continue; }
+    if (!res.ok) {
+      throw new Error('AI service error: HTTP ' + res.status);
+    }
+    const data = await res.json();
+    const content = data && data.choices && data.choices[0] && data.choices[0].message
+      ? data.choices[0].message.content : '';
+    if (content) return content;
+    lastErr = new Error('empty response');
+  }
+  throw new Error('The free AI is busy right now (high demand). Please try again in a minute.');
+}
+
+// Downscale huge camera photos before upload (keeps requests fast + cheap)
+function shrinkBase64Image(base64, maxDim = 1400, quality = 0.85) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const { width, height } = img;
+      if (!width || !height || (width <= maxDim && height <= maxDim)) return resolve(base64);
+      const scale = maxDim / Math.max(width, height);
+      const c = document.createElement('canvas');
+      c.width = Math.round(width * scale);
+      c.height = Math.round(height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL('image/jpeg', quality).split(',')[1]);
+    };
+    img.onerror = () => resolve(base64);
+    img.src = 'data:image/jpeg;base64,' + base64;
   });
-  if (!res.ok) throw new Error('AI service error: HTTP ' + res.status);
-  const data = await res.json();
-  return (data && data.choices && data.choices[0] && data.choices[0].message)
-    ? data.choices[0].message.content : '';
 }
 
 // ============================================================
@@ -109,7 +153,7 @@ Write personalized, practical nutrition and lifestyle advice for this person. In
 Keep it warm, clear, and scannable with short sections and bullet points. Use **bold** for key points. Do not diagnose; remind them to consult a professional for medical conditions.`;
 
   try {
-    const advice = await pollinationsChat(
+    const advice = await aiChat(
       [
         { role: 'system', content: 'You are a supportive, evidence-based nutrition coach.' },
         { role: 'user', content: prompt }
@@ -344,7 +388,7 @@ async function analyzeImage(base64Image) {
     goalContext += 'The user has provided this health profile - tailor your analysis to them:\n' + healthFacts.join('\n') + '\n\n';
   }
   if (userHealthGoals && userHealthGoals.length > 0) {
-    goalContext = 'The user has the following health goals:\n';
+    goalContext += 'The user has the following health goals:\n';
     userHealthGoals.forEach(goal => {
       goalContext += `- ${goal.type}: ${goal.target} (Timeline: ${goal.timeline})\n`;
     });
@@ -588,10 +632,11 @@ Your response MUST be valid JSON with this structure:
       "Analyze this food image and provide detailed nutritional insights:" :
       "Analyze this food image from a fitness and workout perspective:");
   
-  // Pollinations.ai call (free, keyless) — image analysis
+  // BazaarLink.ai call (free tier) — image analysis
   let aiContent;
   try {
-    aiContent = await pollinationsChat([
+    const compactImage = await shrinkBase64Image(base64Image);
+    aiContent = await aiChat([
       {
         role: "system",
         content: systemPrompt
@@ -605,7 +650,7 @@ Your response MUST be valid JSON with this structure:
           },
           {
             type: "image_url",
-            image_url: { url: `data:image/jpeg;base64,${base64Image}` }
+            image_url: { url: `data:image/jpeg;base64,${compactImage}` }
           }
         ]
       }
@@ -1494,10 +1539,10 @@ If the user asks about something not related to nutrition or health, politely re
     
     messages.push(...conversationHistory);
     
-    // Make request to Pollinations.ai (free, keyless)
+    // Make request to BazaarLink.ai (free tier)
     let aiResponse;
     try {
-      aiResponse = await pollinationsChat(messages, { temperature: 0.7, max_tokens: 800 });
+      aiResponse = await aiChat(messages, { temperature: 0.7 });
     } catch (err) {
       throw new Error('AI service error: ' + (err.message || err));
     }
