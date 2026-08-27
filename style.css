@@ -1883,30 +1883,6 @@ a:hover {
   background-color: var(--bg-tertiary);
 }
 
-/* Premium notification */
-.premium-notification {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  background-color: rgba(79, 70, 229, 0.1);
-  border-radius: var(--radius-md);
-  padding: 1rem;
-  margin-bottom: 1.5rem;
-  border-left: 4px solid var(--primary);
-  flex-wrap: wrap;
-}
-
-.premium-notification i {
-  font-size: 1.5rem;
-  color: var(--primary);
-}
-
-.premium-notification p {
-  margin: 0;
-  flex: 1;
-}
-
-.watch-ad-button,
 .upgrade-button {
   padding: 0.5rem 1rem;
   border-radius: var(--radius-md);
@@ -1918,16 +1894,6 @@ a:hover {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-
-.watch-ad-button {
-  background-color: var(--warning);
-  color: white;
-}
-
-.watch-ad-button:hover {
-  background-color: #e59009;
-  transform: translateY(-2px);
 }
 
 .upgrade-button {
@@ -2226,10 +2192,6 @@ a:hover {
   background-color: var(--primary-dark);
 }
 
-.subscription-section {
-  margin-top: 2rem;
-}
-
 .plan-details {
   display: grid;
   grid-template-columns: 1fr;
@@ -2299,104 +2261,6 @@ a:hover {
 
 .plan-features .fa-times {
   color: var(--danger);
-}
-
-/* Ad Modal Styles */
-.ad-modal-content {
-  max-width: 640px;
-}
-
-#ad-timer {
-  background-color: rgba(0, 0, 0, 0.5);
-  color: white;
-  padding: 0.25rem 0.5rem;
-  border-radius: var(--radius-md);
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-.ad-container {
-  width: 100%;
-  margin: 2rem auto;
-  min-height: 90px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background-color: transparent;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  position: relative;
-}
-
-.ad-container::before {
-  content: "Sponsored";
-  position: absolute;
-  top: 0;
-  right: 0;
-  font-size: 0.7rem;
-  background-color: rgba(0,0,0,0.05);
-  color: var(--text-tertiary);
-  padding: 2px 8px;
-  border-radius: 0 var(--radius-md) 0 var(--radius-sm);
-  z-index: 1;
-}
-
-.custom-ad {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  position: relative;
-  box-shadow: var(--shadow-sm);
-  background-color: var(--bg-secondary);
-  overflow: hidden;
-}
-
-.custom-ad:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-.custom-ad.small {
-  max-width: 300px;
-  height: 250px;
-  margin: 0 auto;
-}
-
-.custom-ad.medium {
-  max-width: 728px;
-  height: 90px;
-  margin: 0 auto;
-}
-
-.custom-ad.large {
-  max-width: 970px;
-  height: 250px;
-  margin: 0 auto;
-}
-
-.ad-image {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  border-radius: var(--radius-sm);
-}
-
-.ad-video {
-  max-width: 100%;
-  max-height: 100%;
-  border-radius: var(--radius-sm);
-}
-
-/* Dark mode adjustments for ads */
-.dark-theme .ad-container::before {
-  background-color: rgba(255,255,255,0.1);
-}
-
-.dark-theme .custom-ad {
-  background-color: var(--bg-secondary);
 }
 
 /* Switch Toggle */

@@ -1,9 +1,9 @@
 // ============================================================
-// CalcuBite — no-login identity, limits & cloud storage
+// CalcuBite — no-login identity & cloud storage
 // ------------------------------------------------------------
 // • No signup / no login: every visitor gets an anonymous
 //   device identity stored in localStorage.
-// • Profile + scan limits are local-first (localStorage).
+// • Profile is local-first (localStorage). Scans are unlimited — no ads.
 // • Scan history, health goals and app stats are synced to
 //   MantleDB (https://mantledb.sh) — free anonymous JSON store.
 // • AI is provided by Puter.js (https://puter.com) — keyless.
@@ -15,10 +15,9 @@ const MANTLE_NS = 'calcubite';
 // client-side app, so the key is intentionally public; it only
 // allows writing inside this namespace.
 const MANTLE_KEY = '1d9900af5d44ffcdbd2a9cd7c6015428e1af5325ed8dbac23cded566acbb09c2';
-const DAILY_FREE_SCANS = 5;
 
 // DOM references (may be null until DOMContentLoaded)
-let appContainer, userProfileElem, userNameElem, userAvatarElem, userTierElem, premiumNotification;
+let appContainer, userProfileElem, userNameElem, userAvatarElem, userTierElem;
 
 // ------------------------------------------------------------
 // MantleDB helpers
@@ -67,9 +66,7 @@ function loadProfile() {
   } catch (e) { /* corrupted profile, reset */ }
   return {
     full_name: 'Guest',
-    avatar_url: '',
-    scans_remaining: DAILY_FREE_SCANS,
-    last_scan_reset: new Date().toISOString()
+    avatar_url: ''
   };
 }
 
@@ -170,7 +167,6 @@ function bindDomRefs() {
   userNameElem = document.getElementById('user-name');
   userAvatarElem = document.getElementById('user-avatar');
   userTierElem = document.getElementById('user-tier');
-  premiumNotification = document.getElementById('premium-notification');
 }
 
 function updateUIForUser() {
@@ -204,51 +200,9 @@ function showLandingPage() { checkAuth(); }
 // ------------------------------------------------------------
 // Scan limits (freemium) — local-first
 // ------------------------------------------------------------
-function adUnlimitedActive() {
-  const t = localStorage.getItem('cb_last_ad');
-  return !!t && (Date.now() - new Date(t).getTime()) < 24 * 60 * 60 * 1000;
-}
-
 async function updateScansRemaining(scansUsed = 1) {
-  // Watching an ad unlocks scans for 24 hours
-  if (adUnlimitedActive()) return true;
-
-  if (typeof userProfile.scans_remaining !== 'number') {
-    userProfile.scans_remaining = DAILY_FREE_SCANS;
-  }
-
-  if (userProfile.scans_remaining <= 0) {
-    if (premiumNotification) premiumNotification.style.display = 'flex';
-    return false;
-  }
-
-  userProfile.scans_remaining -= scansUsed;
-  saveProfileLocal();
-  persistProfileCloud();
+  // CalcuBite is ad-free: scans are unlimited. Kept for API compatibility.
   return true;
-}
-
-async function resetDailyScanCount() {
-  const lastReset = new Date(userProfile.last_scan_reset || 0);
-  const now = new Date();
-  const dayDiff = Math.floor((now - lastReset) / (1000 * 60 * 60 * 24));
-
-  if (dayDiff >= 1) {
-    userProfile.scans_remaining = DAILY_FREE_SCANS;
-    userProfile.last_scan_reset = now.toISOString();
-    saveProfileLocal();
-    persistProfileCloud();
-  }
-}
-
-async function watchAd() {
-  // Simulated ad reward: unlocks scanning for the next 24 hours.
-  localStorage.setItem('cb_last_ad', new Date().toISOString());
-  userProfile.scans_remaining = DAILY_FREE_SCANS;
-  saveProfileLocal();
-  persistProfileCloud();
-  if (premiumNotification) premiumNotification.style.display = 'none';
-  window.store.trackStat('ads_watched');
 }
 
 // ------------------------------------------------------------
@@ -277,10 +231,6 @@ function populateProfileModal() {
   const emailInput = document.getElementById('profile-email');
   const planInput = document.getElementById('profile-plan');
   const avatarImg = document.getElementById('profile-avatar-img');
-  const freePlan = document.getElementById('free-plan');
-  const proPlan = document.getElementById('pro-plan');
-  const currentPlanBtn = document.getElementById('current-plan-btn');
-  const upgradePlanBtn = document.getElementById('upgrade-plan-btn');
 
   if (!nameInput) {
     console.error('Essential profile elements not found');
@@ -298,20 +248,6 @@ function populateProfileModal() {
   if (avatarImg) {
     avatarImg.src = userProfile.avatar_url ||
       `https://ui-avatars.com/api/?name=${encodeURIComponent(nameInput.value || 'Guest')}&background=random`;
-  }
-
-  if (freePlan) freePlan.classList.add('active-plan');
-  if (proPlan) proPlan.classList.remove('active-plan');
-  if (currentPlanBtn) currentPlanBtn.style.display = 'none';
-  if (upgradePlanBtn) {
-    upgradePlanBtn.style.display = 'block';
-    upgradePlanBtn.textContent = 'Watch Ad Now';
-    upgradePlanBtn.disabled = false;
-  }
-
-  const adRewardDesc = document.querySelector('.ad-setting-item:nth-child(2) p');
-  if (adRewardDesc) {
-    adRewardDesc.textContent = 'Watching an ad unlocks unlimited scans for 24 hours.';
   }
 
   const profileForm = document.getElementById('profile-form');
@@ -336,14 +272,6 @@ function populateProfileModal() {
       if (userAvatarElem) userAvatarElem.src = url;
     };
   }
-
-  if (upgradePlanBtn) {
-    upgradePlanBtn.onclick = () => watchAd();
-  }
-}
-
-function showUpgradeModal() {
-  watchAd();
 }
 
 // ------------------------------------------------------------
@@ -359,16 +287,6 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       showProfileModal();
     });
-  }
-
-  const watchAdButton = document.getElementById('watch-ad-button');
-  if (watchAdButton) {
-    watchAdButton.addEventListener('click', () => watchAd());
-  }
-
-  const watchAdNow = document.getElementById('watch-ad-now');
-  if (watchAdNow) {
-    watchAdNow.addEventListener('click', () => watchAd());
   }
 
   // Close modals when clicking outside
@@ -393,13 +311,9 @@ document.addEventListener('DOMContentLoaded', () => {
 window.auth = {
   checkAuth,
   updateScansRemaining,
-  resetDailyScanCount,
-  watchAd,
   updateProfile,
   showProfileModal,
-  showUpgradeModal,
   currentUser: () => currentUser,
   userProfile: () => userProfile,
-  isPremium: () => false,
-  lastAdWatched: () => localStorage.getItem('cb_last_ad')
+  isPremium: () => false
 };

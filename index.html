@@ -25,7 +25,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script src="https://js.puter.com/v2/"></script>
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
 </head>
 <body>
     <!-- Landing Page (for unauthenticated users) -->
@@ -43,8 +42,8 @@
                     </div>
                 </div>
                 <div class="user-menu">
-                    <div class="feature-badge" id="upgrade-badge">
-                        <i class="fas fa-ad"></i> <span>Ad-Supported</span>
+                    <div class="feature-badge" id="free-badge">
+                        <i class="fas fa-infinity"></i> <span>Unlimited Scans</span>
                     </div>
                     <div class="user-profile" id="user-profile">
                         <img src="https://ui-avatars.com/api/?name=User&background=random" alt="User" id="user-avatar">
@@ -61,22 +60,11 @@
                 </button>
             </div>
         </header>
-        <div class="ad-container" data-placement="header"></div>
         
         <!-- Main Content -->
         <main class="main-content">
             <div class="container">
-                <!-- Ad container at the top of the content -->
-                <div class="ad-container" data-placement="in-content"></div>
                 
-                <!-- Premium features notification -->
-                <div id="premium-notification" class="premium-notification" style="display: none;">
-                    <i class="fas fa-ad"></i>
-                    <p>You've reached your scan limit. Watch an ad to get more scans!</p>
-                    <button id="watch-ad-button" class="watch-ad-button">
-                        <i class="fas fa-play-circle"></i> Watch Ad to Continue
-                    </button>
-                </div>
                 
                 <div class="content-grid">
                     <!-- Input Panel -->
@@ -145,7 +133,6 @@
                     </section>
 
                     <!-- Results Panel -->
-                    <div class="ad-container" data-placement="results"></div>
                     <section class="results-panel" id="results">
                         <div class="panel-content">
                             <div class="panel-header">
@@ -269,7 +256,6 @@
         </main>
 
         <!-- Footer -->
-        <div class="ad-container" data-placement="footer"></div>
         <footer class="site-footer">
             <div class="container">
                 <p>&copy; 2025 CalcuBite AI. Made with <i class="fas fa-heart"></i> by ByteBuildrz</p>
@@ -279,7 +265,7 @@
         </footer>
     </div>
     
-    <!-- Admin Dashboard Modal -->
+    <!-- Profile Modal -->
     <div id="profile-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -314,48 +300,11 @@
                         <button type="submit" class="primary-button">Update Profile</button>
                     </form>
                     
-                    <div class="subscription-section">
-                        <h3>Ad Settings</h3>
-                        <p>This application is supported by ads. Watching an ad grants you additional scans.</p>
-                        <div class="ad-settings">
-                            <div class="ad-setting-item">
-                                <h4>Scans per day</h4>
-                                <p>You can perform up to 5 scans per day for free.</p>
-                            </div>
-                            <div class="ad-setting-item">
-                                <h4>Ad rewards</h4>
-                                <p>Each ad you watch gives you one scan.</p>
-                            </div>
-                            <button id="watch-ad-now" class="primary-button">
-                                <i class="fas fa-play-circle"></i> Watch Ad Now
-                            </button>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Ad Modal -->
-    <div id="ad-modal" class="modal">
-        <div class="modal-content ad-modal-content">
-            <div class="modal-header">
-                <h2><i class="fas fa-ad"></i> Sponsored Content</h2>
-                <span id="ad-timer">30s</span>
-            </div>
-            <div class="modal-body">
-                <div id="ad-container" class="ad-container">
-                    <div class="ad-placeholder">
-                        <i class="fas fa-video"></i>
-                        <p>Ad is loading...</p>
-                    </div>
-                </div>
-                <button id="ad-skip-button" class="ad-skip-button" disabled>
-                    Skip in <span id="skip-timer">5</span>
-                </button>
-            </div>
-        </div>
-    </div>
 
     
 
