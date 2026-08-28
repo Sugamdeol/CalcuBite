@@ -97,6 +97,31 @@ async function loadUserData() {
     const g = await mantleRead(`users/${deviceId}/goals`);
     if (g && Array.isArray(g.goals)) healthGoals = g.goals;
   } catch (e) { /* no goals yet */ }
+  // Food diary: merge cloud copy into local (union by entry id)
+  try {
+    const d = await mantleRead(`users/${deviceId}/diary`);
+    if (d && d.days && typeof d.days === 'object') {
+      let local = { days: {} };
+      try { local = JSON.parse(localStorage.getItem('cb_diary')) || local; } catch (e) { /* reset */ }
+      if (!local.days) local.days = {};
+      let changed = false;
+      Object.keys(d.days).forEach(dateKey => {
+        const cloudEntries = (d.days[dateKey] && d.days[dateKey].entries) || [];
+        if (!local.days[dateKey]) {
+          if (cloudEntries.length) { local.days[dateKey] = { entries: cloudEntries }; changed = true; }
+          return;
+        }
+        const have = new Set(local.days[dateKey].entries.map(e => e.id));
+        cloudEntries.forEach(e => {
+          if (!have.has(e.id)) { local.days[dateKey].entries.push(e); changed = true; }
+        });
+      });
+      if (changed) {
+        localStorage.setItem('cb_diary', JSON.stringify(local));
+        window.dispatchEvent(new CustomEvent('cb-diary-loaded'));
+      }
+    }
+  } catch (e) { /* no diary yet */ }
 }
 
 function persistHistory() {
@@ -109,6 +134,12 @@ function persistGoals() {
   mantleWrite(`users/${deviceId}/goals`, { goals: healthGoals, updated_at: new Date().toISOString() })
     .catch((e) => console.warn('Goals sync failed:', e.message));
 }
+
+// Food diary cloud sync (called by diary.js)
+window._mantleSyncDiary = function (diaryData) {
+  return mantleWrite(`users/${deviceId}/diary`, { ...diaryData, updated_at: new Date().toISOString() })
+    .catch((e) => console.warn('Diary sync failed:', e.message));
+};
 
 function makeId() {
   return (window.crypto && crypto.randomUUID)

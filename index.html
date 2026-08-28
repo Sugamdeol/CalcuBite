@@ -1,18 +1,19 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CalcuBite AI | Food Analysis Assistant</title>
-    <meta name="description" content="CalcuBite AI analyzes food labels and ingredients to provide nutritional insights and healthier alternatives.">
-    <meta name="keywords" content="food analysis, nutrition, AI, food scanner, ingredient analysis, health, diet">
-    <meta property="og:title" content="CalcuBite AI | Food Analysis Assistant">
-    <meta property="og:description" content="Analyze what's really in your food with our advanced AI assistant.">
+    <title>CalcuBite AI — Know what's really in your food</title>
+    <meta name="description" content="Scan barcodes, snap meal photos, search 3M+ foods. CalcuBite AI gives you instant nutrition insights, a personal food diary and weekly AI reports. No signup needed.">
+    <meta name="keywords" content="food analysis, nutrition, AI, food scanner, barcode scanner, calorie counter, food diary, health, diet">
+    <meta property="og:title" content="CalcuBite AI — Know what's really in your food">
+    <meta property="og:description" content="Scan barcodes, snap meal photos, search 3M+ foods. Instant nutrition insights with zero signup.">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://calcubite.ai">
+    <meta property="og:url" content="https://calcubite.vercel.app">
     <meta property="og:image" content="/logo.png">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="CalcuBite AI | Food Analysis Assistant">
-    <meta name="twitter:description" content="Analyze what's really in your food with our advanced AI assistant.">
+    <meta name="twitter:title" content="CalcuBite AI — Know what's really in your food">
+    <meta name="twitter:description" content="Scan barcodes, snap meal photos, search 3M+ foods. Instant nutrition insights with zero signup.">
     <meta name="twitter:image" content="/logo.png">
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="manifest" href="/manifest.json">
@@ -23,357 +24,369 @@
     <link rel="apple-touch-icon" href="/6233209994745069536_120.jpg">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <style>
+        :root {
+            --primary: #16a34a;
+            --primary-dark: #15803d;
+            --secondary: #facc15;
+            --bg-primary: #f6efe2;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #ece2cd;
+            --text-primary: #141414;
+            --text-secondary: #2b2b2b;
+            --text-tertiary: #525252;
+            --border-color: #141414;
+            --border-w: 2px;
+            --shadow-sm: 3px 3px 0 0 #141414;
+            --shadow-md: 4px 4px 0 0 #141414;
+            --shadow-lg: 6px 6px 0 0 #141414;
+            --radius-md: 0.65rem;
+            --radius-lg: 0.8rem;
+            --radius-xl: 0.9rem;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+        .container { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
+
+        /* Header */
+        .site-header {
+            position: sticky; top: 0; z-index: 100;
+            background: var(--bg-primary);
+            border-bottom: var(--border-w) solid var(--border-color);
+        }
+        .header-inner {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0.9rem 0;
+        }
+        .logo-wrap { display: flex; align-items: center; gap: 0.7rem; }
+        .logo-wrap img {
+            width: 42px; height: 42px; border-radius: var(--radius-md);
+            border: var(--border-w) solid var(--border-color);
+        }
+        .logo-wrap strong { font-size: 1.15rem; font-weight: 900; letter-spacing: -0.02em; }
+        .logo-wrap strong span { color: var(--primary); }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+            padding: 0.8rem 1.6rem;
+            font-family: inherit; font-size: 1rem; font-weight: 800;
+            border: var(--border-w) solid var(--border-color);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
+            cursor: pointer; text-decoration: none;
+            transition: transform 150ms ease, box-shadow 150ms ease;
+        }
+        .btn:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 0 var(--border-color); }
+        .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 0 var(--border-color); }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-secondary { background: var(--bg-secondary); color: var(--text-primary); }
+        .btn-big { padding: 1rem 2.2rem; font-size: 1.1rem; box-shadow: var(--shadow-md); }
+        .btn-sm { padding: 0.55rem 1.1rem; font-size: 0.9rem; }
+
+        /* Hero */
+        .hero { padding: 4.5rem 0 3.5rem; text-align: center; }
+        .hero-badge {
+            display: inline-flex; align-items: center; gap: 0.45rem;
+            padding: 0.4rem 1rem; margin-bottom: 1.5rem;
+            font-size: 0.85rem; font-weight: 800;
+            background: var(--secondary);
+            border: var(--border-w) solid var(--border-color);
+            border-radius: 9999px;
+            box-shadow: var(--shadow-sm);
+        }
+        .hero h1 {
+            font-size: clamp(2.2rem, 6vw, 3.8rem);
+            font-weight: 900; letter-spacing: -0.03em; line-height: 1.1;
+            max-width: 800px; margin: 0 auto 1.25rem;
+        }
+        .hero h1 em { font-style: normal; color: var(--primary); }
+        .hero p.sub {
+            font-size: clamp(1rem, 2.5vw, 1.2rem);
+            color: var(--text-tertiary);
+            max-width: 620px; margin: 0 auto 2rem;
+        }
+        .hero-cta { display: flex; flex-wrap: wrap; gap: 0.9rem; justify-content: center; margin-bottom: 1.75rem; }
+        .trust-row {
+            display: flex; flex-wrap: wrap; gap: 0.6rem 1.5rem; justify-content: center;
+            font-size: 0.85rem; font-weight: 700; color: var(--text-tertiary);
+        }
+        .trust-row span { display: inline-flex; align-items: center; gap: 0.4rem; }
+        .trust-row i { color: var(--primary); }
+
+        /* Mock preview card */
+        .preview {
+            max-width: 420px; margin: 3rem auto 0;
+            background: var(--bg-secondary);
+            border: var(--border-w) solid var(--border-color);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-lg);
+            padding: 1.25rem; text-align: left;
+            transform: rotate(-1deg);
+        }
+        .preview-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; }
+        .preview-head .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--primary); border: 1.5px solid var(--border-color); }
+        .preview-head strong { font-size: 0.9rem; font-weight: 800; }
+        .preview-row {
+            display: flex; align-items: center; gap: 0.75rem;
+            padding: 0.65rem 0.75rem; margin-bottom: 0.6rem;
+            background: var(--bg-primary);
+            border: 1.5px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-size: 0.88rem; font-weight: 600;
+        }
+        .preview-row i { color: var(--primary); width: 20px; text-align: center; }
+        .preview-row .kcal { margin-left: auto; font-weight: 800; color: var(--primary-dark); }
+        .preview-ring {
+            display: flex; align-items: center; gap: 0.9rem;
+            padding: 0.75rem;
+            background: var(--bg-tertiary);
+            border: var(--border-w) solid var(--border-color);
+            border-radius: var(--radius-md);
+        }
+        .preview-ring svg { width: 54px; height: 54px; flex: 0 0 auto; }
+        .preview-ring text { font-size: 9px; font-weight: 800; fill: var(--text-primary); }
+        .preview-ring .pr-info strong { display: block; font-size: 1.05rem; font-weight: 800; }
+        .preview-ring .pr-info small { font-size: 0.75rem; color: var(--text-tertiary); }
+
+        /* Sections */
+        section { padding: 3.5rem 0; }
+        .section-title { text-align: center; margin-bottom: 2.5rem; }
+        .section-title h2 { font-size: clamp(1.6rem, 4vw, 2.3rem); font-weight: 900; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
+        .section-title p { color: var(--text-tertiary); max-width: 560px; margin: 0 auto; }
+
+        /* Features grid */
+        .features-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.25rem;
+        }
+        .feature-card {
+            background: var(--bg-secondary);
+            border: var(--border-w) solid var(--border-color);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            padding: 1.5rem;
+            transition: transform 150ms ease, box-shadow 150ms ease;
+        }
+        .feature-card:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 0 var(--border-color); }
+        .feature-icon {
+            width: 52px; height: 52px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.4rem;
+            background: var(--secondary);
+            border: var(--border-w) solid var(--border-color);
+            border-radius: var(--radius-md);
+            box-shadow: 2px 2px 0 0 var(--border-color);
+            margin-bottom: 1rem;
+        }
+        .feature-card:nth-child(2n) .feature-icon { background: var(--primary); color: #fff; }
+        .feature-card h3 { font-size: 1.08rem; font-weight: 800; margin-bottom: 0.4rem; }
+        .feature-card p { font-size: 0.9rem; color: var(--text-tertiary); }
+
+        /* How it works */
+        .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem; }
+        .step {
+            position: relative;
+            background: var(--bg-secondary);
+            border: var(--border-w) solid var(--border-color);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            padding: 1.75rem 1.5rem 1.5rem;
+        }
+        .step-num {
+            position: absolute; top: -18px; left: 1.25rem;
+            width: 38px; height: 38px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 900; font-size: 1.05rem;
+            background: var(--primary); color: #fff;
+            border: var(--border-w) solid var(--border-color);
+            border-radius: var(--radius-md);
+            box-shadow: 2px 2px 0 0 var(--border-color);
+        }
+        .step h3 { font-size: 1.05rem; font-weight: 800; margin: 0.5rem 0 0.4rem; }
+        .step p { font-size: 0.9rem; color: var(--text-tertiary); }
+
+        /* Final CTA */
+        .final-cta {
+            text-align: center;
+            background: var(--primary);
+            border-top: var(--border-w) solid var(--border-color);
+            border-bottom: var(--border-w) solid var(--border-color);
+            padding: 4rem 0;
+        }
+        .final-cta h2 { color: #fff; font-size: clamp(1.7rem, 4.5vw, 2.6rem); font-weight: 900; letter-spacing: -0.02em; margin-bottom: 0.75rem; text-shadow: 2px 2px 0 rgba(0,0,0,0.25); }
+        .final-cta p { color: rgba(255,255,255,0.92); margin-bottom: 1.75rem; font-size: 1.05rem; }
+        .final-cta .btn-secondary { box-shadow: var(--shadow-md); }
+
+        /* Footer */
+        footer { padding: 2rem 0; text-align: center; font-size: 0.85rem; color: var(--text-tertiary); }
+        footer a { color: var(--primary-dark); font-weight: 700; text-decoration: none; }
+        footer .foot-links { display: flex; gap: 1.25rem; justify-content: center; margin-bottom: 0.75rem; }
+
+        @media (max-width: 560px) {
+            .hero { padding: 3rem 0 2.5rem; }
+            .preview { transform: none; }
+            .btn-big { width: 100%; }
+        }
+    </style>
 </head>
 <body>
-    <!-- Landing Page (for unauthenticated users) -->
-        <div class="page-wrapper" id="app-container">
-        <!-- Header -->
-        <header class="site-header">
-            <div class="container">
-                <div class="logo-container">
-                    <div class="logo">
-                        <img src="/6233209994745069536_120.jpg" alt="CalcuBite Logo" width="40" height="40">
-                    </div>
-                    <div class="brand">
-                        <h1>CalcuBite AI</h1>
-                        <p class="tagline">Analyze what's really in your food</p>
-                    </div>
-                </div>
-                <div class="user-menu">
-                    <div class="feature-badge" id="free-badge">
-                        <i class="fas fa-infinity"></i> <span>Unlimited Scans</span>
-                    </div>
-                    <div class="user-profile" id="user-profile">
-                        <img src="https://ui-avatars.com/api/?name=User&background=random" alt="User" id="user-avatar">
-                        <span id="user-name">User</span>
-                        <i class="fas fa-chevron-down"></i>
-                        <div class="user-dropdown">
-                            <a href="#" id="profile-link"><i class="fas fa-user"></i> Profile</a>
-                            <a href="#" id="dashboard-link"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
-                        </div>
-                    </div>
-                </div>
-                <button id="theme-toggle" class="theme-toggle" aria-label="Toggle dark mode">
-                    <i class="fas fa-moon"></i>
-                </button>
+    <header class="site-header">
+        <div class="container header-inner">
+            <div class="logo-wrap">
+                <img src="/6233209994745069536_120.jpg" alt="CalcuBite logo">
+                <strong>Calcu<span>Bite</span> AI</strong>
             </div>
-        </header>
-        
-        <!-- Main Content -->
-        <main class="main-content">
-            <div class="container">
-                
-                
-                <div class="content-grid">
-                    <!-- Input Panel -->
-                    <section class="input-panel">
-                        <div class="panel-content">
-                            <div class="panel-header">
-                                <h2><i class="fas fa-camera"></i> Scan Food</h2>
-                                <div class="analysis-mode-toggle">
-                                    <button id="labelMode" class="mode-button active">
-                                        <i class="fas fa-tag"></i> Label Analysis
-                                    </button>
-                                    <button id="foodMode" class="mode-button">
-                                        <i class="fas fa-utensils"></i> Food Analysis
-                                    </button>
-                                    <button id="gymMode" class="mode-button">
-                                        <i class="fas fa-dumbbell"></i> Gym Mode
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div class="input-actions">
-                                <button id="toggleCamera" class="primary-button">
-                                    <i class="fas fa-camera"></i>
-                                    <span>Turn On Camera</span>
-                                </button>
-                                
-                                <label for="fileInput" class="secondary-button">
-                                    <i class="fas fa-upload"></i>
-                                    <span>Upload Image</span>
-                                </label>
-                                <input type="file" id="fileInput" accept="image/*" hidden>
-                            </div>
-                            
-                            <div class="camera-container">
-                                <div class="flash-option" data-tooltip="Toggle flash">
-                                    <i class="fas fa-bolt"></i>
-                                </div>
-                                <video id="video" autoplay playsinline></video>
-                                <canvas id="canvas"></canvas>
-                                
-                                <div id="cameraPermission" class="camera-permission">
-                                    <i class="fas fa-camera"></i>
-                                    <p>Please allow camera access to use this feature.</p>
-                                    <button id="requestPermission" class="primary-button">
-                                        <i class="fas fa-video"></i> Enable Camera
-                                    </button>
-                                </div>
-                                
-                                <div class="camera-controls">
-                                    <button id="capture" class="action-button">
-                                        <i class="fas fa-camera"></i> Take Photo
-                                    </button>
-                                    <button id="retake" class="action-button">
-                                        <i class="fas fa-redo"></i> Retake
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <div class="alert error" id="error"></div>
-                            
-                            <div class="loading" id="loading">
-                                <div class="spinner"></div>
-                                <p>Analyzing with advanced AI...</p>
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- Results Panel -->
-                    <section class="results-panel" id="results">
-                        <div class="panel-content">
-                            <div class="panel-header">
-                                <h2><i class="fas fa-chart-line"></i> Analysis Results</h2>
-                            </div>
-                            
-                            <div class="tabs">
-                                <button class="tab-button active" data-tab="overview">
-                                    <i class="fas fa-home"></i> Overview
-                                </button>
-                                <button class="tab-button" data-tab="ingredients">
-                                    <i class="fas fa-list"></i> Ingredients
-                                </button>
-                                <button class="tab-button" data-tab="insights">
-                                    <i class="fas fa-lightbulb"></i> Insights
-                                </button>
-                                <button class="tab-button" data-tab="alternatives">
-                                    <i class="fas fa-exchange-alt"></i> Alternatives
-                                </button>
-                                <button class="tab-button" data-tab="chat">
-                                    <i class="fas fa-comment-dots"></i> AI Chat
-                                </button>
-                            </div>
-                            
-                            <!-- Overview Tab -->
-                            <div class="tab-content active" id="overview-tab">
-                                <div class="results-section" id="healthScore">
-                                    <!-- Health score will be inserted here -->
-                                </div>
-                                
-                                <div class="results-section">
-                                    <h3><i class="fas fa-chart-pie"></i> Nutrition Breakdown</h3>
-                                    <div id="nutritionBreakdown" class="nutrition-breakdown">
-                                        <!-- Nutrition data will be inserted here -->
-                                    </div>
-                                </div>
-                                
-                                <div class="results-section">
-                                    <h3><i class="fas fa-chart-radar"></i> Nutritional Profile</h3>
-                                    <div class="chart-container">
-                                        <canvas id="nutritionChart"></canvas>
-                                    </div>
-                                </div>
-                                
-                                <div class="results-section" id="macronutrient-section">
-                                    <h3><i class="fas fa-chart-pie"></i> Macronutrient Ratio</h3>
-                                    <div class="chart-container">
-                                        <canvas id="macronutrientChart"></canvas>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Ingredients Tab -->
-                            <div class="tab-content" id="ingredients-tab">
-                                <div class="results-section">
-                                    <h3><i class="fas fa-flask"></i> Ingredients Analysis</h3>
-                                    <div id="ingredients">
-                                        <!-- Ingredients data will be inserted here -->
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Insights Tab -->
-                            <div class="tab-content" id="insights-tab">
-                                <div class="results-section">
-                                    <h3><i class="fas fa-brain"></i> Health Insights</h3>
-                                    <div id="insights">
-                                        <!-- Insights will be inserted here -->
-                                    </div>
-                                </div>
-                                
-                                <div class="results-section">
-                                    <h3><i class="fas fa-heartbeat"></i> Health Implications</h3>
-                                    <div id="implications" class="implications-grid">
-                                        <!-- Health implications will be inserted here -->
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Alternatives Tab -->
-                            <div class="tab-content" id="alternatives-tab">
-                                <div class="results-section">
-                                    <h3><i class="fas fa-leaf"></i> Healthier Alternatives</h3>
-                                    <div id="alternatives" class="alternatives-grid">
-                                        <!-- Alternatives will be inserted here -->
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- AI Chat Tab -->
-                            <div class="tab-content" id="chat-tab">
-                                <div id="ai-assistant-container" class="ai-assistant">
-                                    <div class="assistant-header">
-                                        <h3><i class="fas fa-robot"></i> Ask CalcuBite AI</h3>
-                                        <span class="status-badge">Pro Feature</span>
-                                    </div>
-                                    
-                                    <div id="ai-chat-container" class="chat-messages">
-                                        <div class="chat-message ai-message">
-                                            <div class="chat-avatar">
-                                                <i class="fas fa-robot"></i>
-                                            </div>
-                                            <div class="chat-bubble">
-                                                <p>Hello! I'm your CalcuBite AI assistant. How can I help you with nutrition insights today?</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="chat-input-container">
-                                        <input type="text" id="ai-question-input" placeholder="Ask about ingredients, nutrition, or health impacts...">
-                                        <button id="ai-submit-button">
-                                            <i class="fas fa-paper-plane"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-                </div>
-            </div>
-        </main>
-
-        <!-- Footer -->
-        <footer class="site-footer">
-            <div class="container">
-                <p>&copy; 2025 CalcuBite AI. Made with <i class="fas fa-heart"></i> by ByteBuildrz</p>
-                <p class="disclaimer">This application uses AI for analysis. Results should be used for informational purposes only.</p>
-                <p>Powered by <a href="https://bazaarlink.ai/free" target="_blank">BazaarLink AI</a></p>
-            </div>
-        </footer>
-    </div>
-    
-    <!-- Profile Modal -->
-    <div id="profile-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2><i class="fas fa-user"></i> User Profile</h2>
-                <span class="close-modal">&times;</span>
-            </div>
-            <div class="modal-body">
-                <div class="profile-content">
-                    <div class="profile-avatar">
-                        <img id="profile-avatar-img" src="https://ui-avatars.com/api/?name=User&background=random" alt="User">
-                        <button id="change-avatar" class="avatar-change">
-                            <i class="fas fa-camera"></i>
-                        </button>
-                    </div>
-                    <form id="profile-form">
-                        <div class="form-group">
-                            <label for="profile-name">Full Name</label>
-                            <input type="text" id="profile-name" placeholder="Your name">
-                        </div>
-
-                        <h3 class="health-section-title"><i class="fas fa-heartbeat"></i> Your Health Profile</h3>
-                        <p class="health-hint">Personalizes your scan results and advice. Saved on your device.</p>
-
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="health-age">Age</label>
-                                <input type="number" id="health-age" placeholder="e.g. 28" min="1" max="120">
-                            </div>
-                            <div class="form-group">
-                                <label for="health-sex">Sex</label>
-                                <select id="health-sex">
-                                    <option value="">Prefer not to say</option>
-                                    <option value="female">Female</option>
-                                    <option value="male">Male</option>
-                                    <option value="other">Other</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="health-height">Height (cm)</label>
-                                <input type="number" id="health-height" placeholder="e.g. 172">
-                            </div>
-                            <div class="form-group">
-                                <label for="health-weight">Weight (kg)</label>
-                                <input type="number" id="health-weight" placeholder="e.g. 68">
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="health-activity">Activity Level</label>
-                            <select id="health-activity">
-                                <option value="">Select...</option>
-                                <option value="sedentary">Sedentary (little exercise)</option>
-                                <option value="light">Light (1-3 days/week)</option>
-                                <option value="moderate">Moderate (3-5 days/week)</option>
-                                <option value="active">Very active (6-7 days/week)</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="health-goal">Primary Goal</label>
-                            <select id="health-goal">
-                                <option value="">Select...</option>
-                                <option value="lose-weight">Lose weight</option>
-                                <option value="gain-muscle">Gain muscle</option>
-                                <option value="maintain">Maintain weight</option>
-                                <option value="improve-energy">Improve energy</option>
-                                <option value="manage-condition">Manage a health condition</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="health-dietary">Dietary Preferences / Restrictions</label>
-                            <input type="text" id="health-dietary" placeholder="e.g. vegetarian, diabetic, low-sodium, nut allergy">
-                        </div>
-
-                        <div class="form-group">
-                            <label for="health-conditions">Health Conditions (optional)</label>
-                            <textarea id="health-conditions" rows="2" placeholder="e.g. type 2 diabetes, high blood pressure..."></textarea>
-                        </div>
-
-                        <button type="submit" class="primary-button"><i class="fas fa-save"></i> Save Profile</button>
-                        <button type="button" id="get-health-advice" class="secondary-button"><i class="fas fa-lightbulb"></i> Get Personalized Health Advice</button>
-                    </form>
-                    
-                </div>
-            </div>
+            <a href="/app.html" class="btn btn-primary btn-sm">Launch App <i class="fa-solid fa-arrow-right"></i></a>
         </div>
-    </div>
+    </header>
 
-    <!-- Health Advice Modal -->
-    <div id="advice-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2><i class="fas fa-lightbulb"></i> Personalized Health Advice</h2>
-                <span class="close-modal">&times;</span>
-            </div>
-            <div class="modal-body">
-                <div id="advice-content" class="advice-content">
-                    <p>Fill in your health profile, then click "Get Personalized Health Advice".</p>
+    <main>
+        <!-- Hero -->
+        <section class="hero">
+            <div class="container">
+                <div class="hero-badge"><i class="fa-solid fa-bolt"></i> 100% free · No signup needed</div>
+                <h1>Know what's <em>really</em> in your food</h1>
+                <p class="sub">Scan any barcode, snap a photo of your meal, or just type what you ate. CalcuBite AI breaks down calories, macros and ingredients in seconds — and keeps a smart food diary for you.</p>
+                <div class="hero-cta">
+                    <a href="/app.html" class="btn btn-primary btn-big"><i class="fa-solid fa-camera"></i> Start scanning — it's free</a>
+                    <a href="#features" class="btn btn-secondary btn-big"><i class="fa-solid fa-circle-info"></i> See features</a>
+                </div>
+                <div class="trust-row">
+                    <span><i class="fa-solid fa-user-slash"></i> No account required</span>
+                    <span><i class="fa-solid fa-box-open"></i> 3M+ barcode products</span>
+                    <span><i class="fa-solid fa-wifi"></i> Works offline</span>
+                    <span><i class="fa-solid fa-microphone"></i> Voice search</span>
+                </div>
+
+                <!-- Mock app preview -->
+                <div class="preview" aria-hidden="true">
+                    <div class="preview-head">
+                        <span class="dot"></span>
+                        <strong>Today · 1,480 / 2,100 kcal</strong>
+                    </div>
+                    <div class="preview-row"><i class="fa-solid fa-barcode"></i> Oats &amp; honey granola <span class="kcal">380 kcal</span></div>
+                    <div class="preview-row"><i class="fa-solid fa-camera"></i> Dal + 2 chapatis <span class="kcal">520 kcal</span></div>
+                    <div class="preview-row"><i class="fa-solid fa-mug-hot"></i> Masala chai <span class="kcal">120 kcal</span></div>
+                    <div class="preview-ring">
+                        <svg viewBox="0 0 42 42">
+                            <circle cx="21" cy="21" r="15.9" fill="none" stroke="#ece2cd" stroke-width="5"></circle>
+                            <circle cx="21" cy="21" r="15.9" fill="none" stroke="#16a34a" stroke-width="5" stroke-dasharray="70 30" stroke-dashoffset="25"></circle>
+                            <text x="21" y="21" text-anchor="middle" dominant-baseline="central">70%</text>
+                        </svg>
+                        <div class="pr-info">
+                            <strong>On track 💪</strong>
+                            <small>Protein 62/90g · Carbs 180/240g · Fat 38/60g</small>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
-    </div>
+        </section>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="auth.js"></script>
-    <script src="script.js"></script>
+        <!-- Features -->
+        <section id="features">
+            <div class="container">
+                <div class="section-title">
+                    <h2>Everything you need to eat smarter</h2>
+                    <p>Six tools in one tiny app — no login wall, no paywall, no nonsense.</p>
+                </div>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon"><i class="fa-solid fa-camera"></i></div>
+                        <h3>AI meal photo analysis</h3>
+                        <p>Snap your plate. Our vision AI identifies the food, estimates calories and macros, and flags anything worth knowing about.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon"><i class="fa-solid fa-barcode"></i></div>
+                        <h3>Barcode scanner</h3>
+                        <p>Point your camera at any packaged food. We pull verified nutrition data from Open Food Facts — 3 million+ products with Nutri-Score and NOVA ratings.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon"><i class="fa-solid fa-magnifying-glass"></i></div>
+                        <h3>Search anything</h3>
+                        <p>Type "2 chapatis and dal" or search packaged products by name. Can't type? Use one-tap voice search.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon"><i class="fa-solid fa-book-open"></i></div>
+                        <h3>Personal food diary</h3>
+                        <p>Log every meal to breakfast, lunch, dinner or snacks. Your diary syncs to your daily calorie and macro targets automatically.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon"><i class="fa-solid fa-bullseye"></i></div>
+                        <h3>Smart daily goals</h3>
+                        <p>Tell us your age, weight and activity level once — we compute your personal calorie, protein, carb and fat targets with real science (Mifflin-St Jeor).</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon"><i class="fa-solid fa-chart-line"></i></div>
+                        <h3>Weekly AI report</h3>
+                        <p>Get a 7-day trend chart plus an AI-written weekly summary of your eating patterns — and share any result as a beautiful card.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- How it works -->
+        <section id="how">
+            <div class="container">
+                <div class="section-title">
+                    <h2>Up and running in 30 seconds</h2>
+                    <p>No forms, no email verification. Open the app and go.</p>
+                </div>
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-num">1</div>
+                        <h3>Open CalcuBite</h3>
+                        <p>Launch the app — you're already in. Optionally set your health profile for personalized targets (takes 15 seconds, skippable).</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">2</div>
+                        <h3>Scan, snap or search</h3>
+                        <p>Barcode a product, photograph your meal, or type/say what you ate. Instant breakdown: calories, protein, carbs, fats and ingredient insights.</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">3</div>
+                        <h3>Log &amp; track</h3>
+                        <p>Tap "Add to Diary" and pick the meal. Watch your daily ring fill up, check the weekly chart, and read your AI report every Sunday.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Final CTA -->
+        <section class="final-cta">
+            <div class="container">
+                <h2>Your food has secrets. Let's find them.</h2>
+                <p>Free forever. No account. Install it like a native app.</p>
+                <a href="/app.html" class="btn btn-secondary btn-big"><i class="fa-solid fa-utensils"></i> Open CalcuBite AI</a>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="foot-links">
+                <a href="/app.html">App</a>
+                <a href="#features">Features</a>
+                <a href="#how">How it works</a>
+            </div>
+            <p>© 2026 CalcuBite AI · Product data from <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a> · Made with <i class="fa-solid fa-heart" style="color:#ef4444"></i> for healthier eating</p>
+        </div>
+    </footer>
+
+    <script>
+        // Register service worker (same as app)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(() => {});
+            });
+        }
+    </script>
 </body>
 </html>

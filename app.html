@@ -1,0 +1,414 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CalcuBite AI | Food Analysis Assistant</title>
+    <meta name="description" content="CalcuBite AI analyzes food labels and ingredients to provide nutritional insights and healthier alternatives.">
+    <meta name="keywords" content="food analysis, nutrition, AI, food scanner, ingredient analysis, health, diet">
+    <meta property="og:title" content="CalcuBite AI | Food Analysis Assistant">
+    <meta property="og:description" content="Analyze what's really in your food with our advanced AI assistant.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://calcubite.ai">
+    <meta property="og:image" content="/logo.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="CalcuBite AI | Food Analysis Assistant">
+    <meta name="twitter:description" content="Analyze what's really in your food with our advanced AI assistant.">
+    <meta name="twitter:image" content="/logo.png">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#16a34a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CalcuBite">
+    <link rel="apple-touch-icon" href="/6233209994745069536_120.jpg">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Landing Page (for unauthenticated users) -->
+        <div class="page-wrapper" id="app-container">
+        <!-- Header -->
+        <header class="site-header">
+            <div class="container">
+                <div class="logo-container">
+                    <div class="logo">
+                        <img src="/6233209994745069536_120.jpg" alt="CalcuBite Logo" width="40" height="40">
+                    </div>
+                    <div class="brand">
+                        <h1>CalcuBite AI</h1>
+                        <p class="tagline">Analyze what's really in your food</p>
+                    </div>
+                </div>
+                <div class="user-menu">
+                    <div class="feature-badge" id="free-badge">
+                        <i class="fas fa-infinity"></i> <span>Unlimited Scans</span>
+                    </div>
+                    <div class="user-profile" id="user-profile">
+                        <img src="https://ui-avatars.com/api/?name=User&background=random" alt="User" id="user-avatar">
+                        <span id="user-name">User</span>
+                        <i class="fas fa-chevron-down"></i>
+                        <div class="user-dropdown">
+                            <a href="#" id="profile-link"><i class="fas fa-user"></i> Profile</a>
+                            <a href="#" id="dashboard-link"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+                        </div>
+                    </div>
+                </div>
+                <button id="theme-toggle" class="theme-toggle" aria-label="Toggle dark mode">
+                    <i class="fas fa-moon"></i>
+                </button>
+            </div>
+        </header>
+        
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="container">
+                
+                
+                <!-- Today strip: daily calories & macros -->
+                <section class="today-strip" id="today-strip" aria-label="Today's nutrition"></section>
+                
+                <div class="content-grid">
+                    <!-- Input Panel -->
+                    <section class="input-panel">
+                        <div class="panel-content">
+                            <div class="panel-header">
+                                <h2><i class="fas fa-camera"></i> Scan Food</h2>
+                                <div class="analysis-mode-toggle">
+                                    <button id="labelMode" class="mode-button active">
+                                        <i class="fas fa-tag"></i> Label Analysis
+                                    </button>
+                                    <button id="foodMode" class="mode-button">
+                                        <i class="fas fa-utensils"></i> Food Analysis
+                                    </button>
+                                    <button id="gymMode" class="mode-button">
+                                        <i class="fas fa-dumbbell"></i> Gym Mode
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="input-actions">
+                                <button id="toggleCamera" class="primary-button">
+                                    <i class="fas fa-camera"></i>
+                                    <span>Turn On Camera</span>
+                                </button>
+                                
+                                <button id="barcodeScanBtn" class="secondary-button">
+                                    <i class="fas fa-barcode"></i>
+                                    <span>Scan Barcode</span>
+                                </button>
+                                
+                                <label for="fileInput" class="secondary-button">
+                                    <i class="fas fa-upload"></i>
+                                    <span>Upload Image</span>
+                                </label>
+                                <input type="file" id="fileInput" accept="image/*" hidden>
+                                <label for="barcodeFileInput" class="secondary-button" data-tooltip="Decode a barcode from a photo">
+                                    <i class="fas fa-barcode"></i>
+                                    <span>Barcode from Photo</span>
+                                </label>
+                                <input type="file" id="barcodeFileInput" accept="image/*" hidden>
+                            </div>
+                            
+                            <!-- Text / voice food search -->
+                            <div class="food-search-bar">
+                                <input type="text" id="foodSearchInput" placeholder='Or type what you ate — e.g. "2 chapatis + dal"' autocomplete="off">
+                                <button id="voiceSearchBtn" class="icon-btn" aria-label="Voice search"><i class="fas fa-microphone"></i></button>
+                                <button id="foodSearchBtn" class="primary-button"><i class="fas fa-magnifying-glass"></i> Analyze</button>
+                            </div>
+                            
+                            <div class="camera-container">
+                                <div class="flash-option" data-tooltip="Toggle flash">
+                                    <i class="fas fa-bolt"></i>
+                                </div>
+                                <video id="video" autoplay playsinline></video>
+                                <canvas id="canvas"></canvas>
+                                <div id="barcode-hint" class="barcode-hint" style="display:none">
+                                    <i class="fas fa-barcode"></i> Point the camera at the barcode — hold steady
+                                </div>
+                                
+                                <div id="cameraPermission" class="camera-permission">
+                                    <i class="fas fa-camera"></i>
+                                    <p>Please allow camera access to use this feature.</p>
+                                    <button id="requestPermission" class="primary-button">
+                                        <i class="fas fa-video"></i> Enable Camera
+                                    </button>
+                                </div>
+                                
+                                <div class="camera-controls">
+                                    <button id="capture" class="action-button">
+                                        <i class="fas fa-camera"></i> Take Photo
+                                    </button>
+                                    <button id="retake" class="action-button">
+                                        <i class="fas fa-redo"></i> Retake
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="alert error" id="error"></div>
+                            
+                            <div class="loading" id="loading">
+                                <div class="spinner"></div>
+                                <p>Analyzing with advanced AI...</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Results Panel -->
+                    <section class="results-panel" id="results">
+                        <div class="panel-content">
+                            <div class="panel-header">
+                                <h2><i class="fas fa-chart-line"></i> Analysis Results</h2>
+                                <div class="results-actions">
+                                    <button id="addToDiaryBtn" class="secondary-button" style="display:none">
+                                        <i class="fas fa-plus-circle"></i> Add to Diary
+                                    </button>
+                                    <button id="shareResultBtn" class="secondary-button">
+                                        <i class="fas fa-share-nodes"></i> Share
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="tabs">
+                                <button class="tab-button active" data-tab="overview">
+                                    <i class="fas fa-home"></i> Overview
+                                </button>
+                                <button class="tab-button" data-tab="ingredients">
+                                    <i class="fas fa-list"></i> Ingredients
+                                </button>
+                                <button class="tab-button" data-tab="insights">
+                                    <i class="fas fa-lightbulb"></i> Insights
+                                </button>
+                                <button class="tab-button" data-tab="alternatives">
+                                    <i class="fas fa-exchange-alt"></i> Alternatives
+                                </button>
+                                <button class="tab-button" data-tab="chat">
+                                    <i class="fas fa-comment-dots"></i> AI Chat
+                                </button>
+                            </div>
+                            
+                            <!-- Overview Tab -->
+                            <div class="tab-content active" id="overview-tab">
+                                <div class="results-section" id="healthScore">
+                                    <!-- Health score will be inserted here -->
+                                </div>
+                                
+                                <div class="results-section">
+                                    <h3><i class="fas fa-chart-pie"></i> Nutrition Breakdown</h3>
+                                    <div id="nutritionBreakdown" class="nutrition-breakdown">
+                                        <!-- Nutrition data will be inserted here -->
+                                    </div>
+                                </div>
+                                
+                                <div class="results-section">
+                                    <h3><i class="fas fa-chart-radar"></i> Nutritional Profile</h3>
+                                    <div class="chart-container">
+                                        <canvas id="nutritionChart"></canvas>
+                                    </div>
+                                </div>
+                                
+                                <div class="results-section" id="macronutrient-section">
+                                    <h3><i class="fas fa-chart-pie"></i> Macronutrient Ratio</h3>
+                                    <div class="chart-container">
+                                        <canvas id="macronutrientChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Ingredients Tab -->
+                            <div class="tab-content" id="ingredients-tab">
+                                <div class="results-section">
+                                    <h3><i class="fas fa-flask"></i> Ingredients Analysis</h3>
+                                    <div id="ingredients">
+                                        <!-- Ingredients data will be inserted here -->
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Insights Tab -->
+                            <div class="tab-content" id="insights-tab">
+                                <div class="results-section">
+                                    <h3><i class="fas fa-brain"></i> Health Insights</h3>
+                                    <div id="insights">
+                                        <!-- Insights will be inserted here -->
+                                    </div>
+                                </div>
+                                
+                                <div class="results-section">
+                                    <h3><i class="fas fa-heartbeat"></i> Health Implications</h3>
+                                    <div id="implications" class="implications-grid">
+                                        <!-- Health implications will be inserted here -->
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Alternatives Tab -->
+                            <div class="tab-content" id="alternatives-tab">
+                                <div class="results-section">
+                                    <h3><i class="fas fa-leaf"></i> Healthier Alternatives</h3>
+                                    <div id="alternatives" class="alternatives-grid">
+                                        <!-- Alternatives will be inserted here -->
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- AI Chat Tab -->
+                            <div class="tab-content" id="chat-tab">
+                                <div id="ai-assistant-container" class="ai-assistant">
+                                    <div class="assistant-header">
+                                        <h3><i class="fas fa-robot"></i> Ask CalcuBite AI</h3>
+                                        <span class="status-badge">Pro Feature</span>
+                                    </div>
+                                    
+                                    <div id="ai-chat-container" class="chat-messages">
+                                        <div class="chat-message ai-message">
+                                            <div class="chat-avatar">
+                                                <i class="fas fa-robot"></i>
+                                            </div>
+                                            <div class="chat-bubble">
+                                                <p>Hello! I'm your CalcuBite AI assistant. How can I help you with nutrition insights today?</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="chat-input-container">
+                                        <input type="text" id="ai-question-input" placeholder="Ask about ingredients, nutrition, or health impacts...">
+                                        <button id="ai-submit-button">
+                                            <i class="fas fa-paper-plane"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="site-footer">
+            <div class="container">
+                <p>&copy; 2025 CalcuBite AI. Made with <i class="fas fa-heart"></i> by ByteBuildrz</p>
+                <p class="disclaimer">This application uses AI for analysis. Results should be used for informational purposes only.</p>
+                <p>Powered by <a href="https://bazaarlink.ai/free" target="_blank">BazaarLink AI</a></p>
+            </div>
+        </footer>
+    </div>
+    
+    <!-- Profile Modal -->
+    <div id="profile-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-user"></i> User Profile</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="profile-content">
+                    <div class="profile-avatar">
+                        <img id="profile-avatar-img" src="https://ui-avatars.com/api/?name=User&background=random" alt="User">
+                        <button id="change-avatar" class="avatar-change">
+                            <i class="fas fa-camera"></i>
+                        </button>
+                    </div>
+                    <form id="profile-form">
+                        <div class="form-group">
+                            <label for="profile-name">Full Name</label>
+                            <input type="text" id="profile-name" placeholder="Your name">
+                        </div>
+
+                        <h3 class="health-section-title"><i class="fas fa-heartbeat"></i> Your Health Profile</h3>
+                        <p class="health-hint">Personalizes your scan results and advice. Saved on your device.</p>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="health-age">Age</label>
+                                <input type="number" id="health-age" placeholder="e.g. 28" min="1" max="120">
+                            </div>
+                            <div class="form-group">
+                                <label for="health-sex">Sex</label>
+                                <select id="health-sex">
+                                    <option value="">Prefer not to say</option>
+                                    <option value="female">Female</option>
+                                    <option value="male">Male</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="health-height">Height (cm)</label>
+                                <input type="number" id="health-height" placeholder="e.g. 172">
+                            </div>
+                            <div class="form-group">
+                                <label for="health-weight">Weight (kg)</label>
+                                <input type="number" id="health-weight" placeholder="e.g. 68">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="health-activity">Activity Level</label>
+                            <select id="health-activity">
+                                <option value="">Select...</option>
+                                <option value="sedentary">Sedentary (little exercise)</option>
+                                <option value="light">Light (1-3 days/week)</option>
+                                <option value="moderate">Moderate (3-5 days/week)</option>
+                                <option value="active">Very active (6-7 days/week)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="health-goal">Primary Goal</label>
+                            <select id="health-goal">
+                                <option value="">Select...</option>
+                                <option value="lose-weight">Lose weight</option>
+                                <option value="gain-muscle">Gain muscle</option>
+                                <option value="maintain">Maintain weight</option>
+                                <option value="improve-energy">Improve energy</option>
+                                <option value="manage-condition">Manage a health condition</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="health-dietary">Dietary Preferences / Restrictions</label>
+                            <input type="text" id="health-dietary" placeholder="e.g. vegetarian, diabetic, low-sodium, nut allergy">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="health-conditions">Health Conditions (optional)</label>
+                            <textarea id="health-conditions" rows="2" placeholder="e.g. type 2 diabetes, high blood pressure..."></textarea>
+                        </div>
+
+                        <button type="submit" class="primary-button"><i class="fas fa-save"></i> Save Profile</button>
+                        <button type="button" id="get-health-advice" class="secondary-button"><i class="fas fa-lightbulb"></i> Get Personalized Health Advice</button>
+                    </form>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Health Advice Modal -->
+    <div id="advice-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-lightbulb"></i> Personalized Health Advice</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="advice-content" class="advice-content">
+                    <p>Fill in your health profile, then click "Get Personalized Health Advice".</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="auth.js"></script>
+    <script src="script.js"></script>
+    <script src="vendor/zxing.min.js" defer></script>
+    <script src="off.js"></script>
+    <script src="diary.js"></script>
+    <script src="onboarding.js"></script>
+</body>
+</html>

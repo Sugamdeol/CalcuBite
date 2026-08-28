@@ -2,7 +2,7 @@
   "name": "CalcuBite AI",
   "short_name": "CalcuBite",
   "description": "Analyze what's really in your food with AI-powered insights",
-  "start_url": "/",
+  "start_url": "/app.html",
   "display": "standalone",
   "background_color": "#f9fafb",
   "theme_color": "#16a34a",

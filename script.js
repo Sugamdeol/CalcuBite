@@ -728,6 +728,11 @@ Your response MUST be valid JSON with this structure:
   // Display the results
   displayResults(analysisData);
   loadingDiv.style.display = 'none';
+
+  // AI result: clear any stale verified-product banner, enable diary add
+  window.lastProductMeta = analysisData.productMeta || null;
+  if (typeof renderProductBanner === 'function') renderProductBanner(analysisData.productMeta || null);
+  if (window.diary) window.diary.updateAddButton();
   
   // Log the scan to the database if authenticated
   if (window.auth.currentUser()) {
@@ -1732,6 +1737,10 @@ function showDashboard() {
           window.scanHistoryChart.destroy();
           window.scanHistoryChart = null;
         }
+        if (window.diaryWeekChart) {
+          window.diaryWeekChart.destroy();
+          window.diaryWeekChart = null;
+        }
       });
       
       // Add goal button
@@ -1743,6 +1752,9 @@ function showDashboard() {
       startScanningBtn.addEventListener('click', () => {
         dashboardModal.style.display = 'none';
       });
+
+      // Food diary section (diary.js)
+      if (window.diary) window.diary.enhanceDashboard(dashboardModal);
     }
     
     // Fetch user's dashboard data
