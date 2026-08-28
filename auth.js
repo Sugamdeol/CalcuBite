@@ -6,7 +6,7 @@
 // • Profile is local-first (localStorage). Scans are unlimited — no ads.
 // • Scan history, health goals and app stats are synced to
 //   MantleDB (https://mantledb.sh) — free anonymous JSON store.
-// • AI is provided by Pollinations.ai (https://pollinations.ai) — free, keyless.
+// • AI is provided by BazaarLink.ai free tier (https://bazaarlink.ai/free).
 // ============================================================
 
 const MANTLE_BASE = 'https://mantledb.sh/v2';
