@@ -43,12 +43,12 @@ const mantleIncrement = (path, key) => mantleFetch(`increment/${path}`, { method
 // Anonymous device identity (replaces Supabase auth)
 // ------------------------------------------------------------
 function getDeviceId() {
-  let id = localStorage.getItem('cb_device_id');
+  let id = window.cb.storage.get('cb_device_id');
   if (!id) {
     id = (window.crypto && crypto.randomUUID)
       ? crypto.randomUUID()
       : 'dev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
-    localStorage.setItem('cb_device_id', id);
+    window.cb.storage.set('cb_device_id', id);
   }
   return id;
 }
@@ -61,7 +61,7 @@ const currentUser = { id: deviceId, email: '' };
 // ------------------------------------------------------------
 function loadProfile() {
   try {
-    const p = JSON.parse(localStorage.getItem('cb_profile'));
+    const p = JSON.parse(window.cb.storage.get('cb_profile'));
     if (p && typeof p === 'object') return p;
   } catch (e) { /* corrupted profile, reset */ }
   return {
@@ -74,7 +74,7 @@ function loadProfile() {
 let userProfile = loadProfile();
 
 function saveProfileLocal() {
-  localStorage.setItem('cb_profile', JSON.stringify(userProfile));
+  window.cb.storage.set('cb_profile', JSON.stringify(userProfile));
 }
 
 function persistProfileCloud() {
@@ -114,7 +114,7 @@ async function loadUserData() {
     const d = await mantleRead(`users/${deviceId}/diary`);
     if (d && d.days && typeof d.days === 'object') {
       let local = { days: {} };
-      try { local = JSON.parse(localStorage.getItem('cb_diary')) || local; } catch (e) { /* reset */ }
+      try { local = JSON.parse(window.cb.storage.get('cb_diary')) || local; } catch (e) { /* reset */ }
       if (!local.days) local.days = {};
       local.deleted = [...new Set([...(local.deleted || []), ...(d.deleted || [])])];
       const deleted = new Set(local.deleted);
@@ -136,7 +136,7 @@ async function loadUserData() {
         if (before !== day.entries.length) changed = true;
       });
       if (changed) {
-        localStorage.setItem('cb_diary', JSON.stringify(local));
+        window.cb.storage.set('cb_diary', JSON.stringify(local));
         window.dispatchEvent(new CustomEvent('cb-diary-loaded'));
       }
     }
@@ -323,7 +323,7 @@ function populateProfileModal() {
         full_name: newName || userProfile.full_name,
         health
       });
-      alert(success ? 'Profile saved!' : 'Failed to save profile.');
+      window.cbToast?.(success ? 'Profile saved' : 'Failed to save profile.');
     };
   }
 

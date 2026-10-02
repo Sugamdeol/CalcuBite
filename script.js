@@ -769,6 +769,8 @@ Your response MUST be valid JSON with this structure:
 // Display results function - updated to handle gym mode
 function displayResults(data) {
   const original = data;
+  window.lastProductMeta = original.productMeta || null;
+  if (typeof renderProductBanner === 'function') renderProductBanner(original.productMeta || null);
   data = window.cb.safeAnalysis(data);
   loadingDiv.style.display = 'none';
   resultsDiv.style.display = 'block';
@@ -1375,7 +1377,7 @@ function createNutritionChart(data) {
   const entries = ['protein','carbs','fat','fiber'].map(key => [key, window.cb.number(nutrition[key])]).filter(([,value]) => value !== null);
   if (typeof Chart === 'undefined' || !entries.length) { section.style.display='none'; return; }
   section.style.display='block';
-  section.querySelector('h3').textContent = data.productMeta?.source === 'off' ? 'Nutrients per 100 g' : 'Estimated nutrients per serving';
+  section.querySelector('h3').textContent = data.productMeta?.source === 'off' ? 'Nutrients per 100 g' : 'Nutrients in this estimate';
   const ink = getComputedStyle(document.body).getPropertyValue('--text-primary').trim();
   chartInstance = new Chart(chartEl.getContext('2d'), {
     type:'bar',
@@ -2042,7 +2044,7 @@ async function saveGoal() {
     updateDashboardUI();
     
     // Show success message
-    alert('Goal added successfully!');
+    window.cbToast?.('Goal saved');
     
   } catch (error) {
     console.error('Error saving goal:', error);

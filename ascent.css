@@ -247,6 +247,11 @@ h1,h2,h3 { font-weight:900; letter-spacing:-.04em; }
 .results-section small,.product-banner-badges,.picker-item-meta { font-size:12px; }
 .badge { white-space:normal; }
 .product-banner-name,.picker-item-name,.scan-item-name { overflow-wrap:anywhere; }
+@media(min-width:721px) and (max-width:1150px) {
+  .today-meals { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .today-meal { min-width:0; flex-wrap:wrap; }
+  .today-inner { min-width:0; }
+}
 @media(max-width:720px) {
   .workspace-rail { padding:8px 14px; }
   .rail-brand { margin:0; }

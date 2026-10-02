@@ -160,7 +160,7 @@
       protein = meta.proteinEstimate != null ? meta.proteinEstimate : parseNum(ne.protein);
       carbs = meta.carbsEstimate != null ? meta.carbsEstimate : parseNum(ne.carbs);
       fat = meta.fatEstimate != null ? meta.fatEstimate : parseNum(ne.fat);
-      serving = 'per serving (AI estimate)';
+      serving = /100\s*g/i.test(ne.calories || '') ? 'per 100 g (AI estimate)' : 'per serving (AI estimate)';
     }
     return { name, calories, protein, carbs, fat, serving, source: meta.source || 'ai' };
   }
