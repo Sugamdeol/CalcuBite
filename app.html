@@ -85,16 +85,16 @@
                 
                 
                 <section class="workspace-banner" aria-label="Personalize your workspace"><div><strong>Your food. Your goals. Your pace.</strong><p>Add a health profile to make your daily targets personal.</p></div><button class="primary-button" data-workspace="profile">Set up profile <span aria-hidden="true">↗</span></button></section>
-                <section class="workspace-heading"><div><p class="eyebrow" id="workspace-date">YOUR DAILY WORKSPACE</p><h2>Your daily nutrition</h2><p>Look up a food. Check your portion. Keep track of your day.</p></div><button class="secondary-button" data-workspace="report"><i class="fas fa-chart-line" aria-hidden="true"></i> Weekly report</button></section>
+                <section class="workspace-heading"><div><p class="eyebrow" id="workspace-date">YOUR DAILY WORKSPACE</p><h2>What did you eat?</h2><p>Start with one food or meal. We’ll help you understand it.</p></div><button class="secondary-button" data-workspace="report"><i class="fas fa-chart-line" aria-hidden="true"></i> Weekly report</button></section>
                 <!-- Today strip: daily calories & macros -->
-                <section class="today-strip" id="today-strip" aria-label="Today's nutrition"></section>
+                <details class="daily-progress"><summary>Today’s progress <span>View calories and logged meals</span></summary><section class="today-strip" id="today-strip" aria-label="Today's nutrition"></section></details>
                 
                 <div class="content-grid">
                     <!-- Input Panel -->
                     <section class="input-panel" id="scan-workspace">
                         <div class="panel-content">
                             <div class="panel-header">
-                                <h2><i class="fas fa-camera"></i> Scan Food</h2>
+                                <h2><i class="fas fa-camera"></i> Add a food</h2>
                                 <div class="analysis-mode-toggle">
                                     <button id="labelMode" class="mode-button active">
                                         <i class="fas fa-tag"></i> Label Analysis
@@ -108,7 +108,7 @@
                                 </div>
                             </div>
 
-                            <div class="input-actions">
+                            <details class="photo-options"><summary>Use a photo or barcode <span>Camera, upload and scan</span></summary><div class="input-actions">
                                 <button id="toggleCamera" class="primary-button">
                                     <i class="fas fa-camera"></i>
                                     <span>Turn On Camera</span>
@@ -129,11 +129,11 @@
                                     <span>Barcode from Photo</span>
                                 </label>
                                 <input type="file" id="barcodeFileInput" accept="image/*" hidden>
-                            </div>
+                            </div></details>
                             
                             <!-- Text / voice food search -->
                             <div class="food-search-bar">
-                                <input type="text" id="foodSearchInput" placeholder='Or type what you ate — e.g. "2 chapatis + dal"' autocomplete="off">
+                                <label class="food-entry-label" for="foodSearchInput">Food or meal</label><input type="text" id="foodSearchInput" placeholder='e.g. 2 chapatis + dal' autocomplete="off">
                                 <button id="voiceSearchBtn" class="icon-btn" aria-label="Voice search"><i class="fas fa-microphone"></i></button>
                                 <button id="foodSearchBtn" class="primary-button"><i class="fas fa-magnifying-glass"></i> Analyze</button>
                             </div>
@@ -182,7 +182,7 @@
                     <section class="results-panel" id="results">
                         <div class="panel-content">
                             <div class="panel-header">
-                                <h2><i class="fas fa-chart-line"></i> Analysis Results</h2>
+                                <button id="back-to-food" class="secondary-button" type="button">← New food</button><h2><i class="fas fa-chart-line"></i> Food analysis</h2>
                                 <div class="results-actions">
                                     <button id="addToDiaryBtn" class="secondary-button" style="display:none">
                                         <i class="fas fa-plus-circle"></i> Add to Diary

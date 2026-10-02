@@ -16,6 +16,7 @@
       else if ((action === 'dashboard' || action === 'report') && typeof showDashboard === 'function') showDashboard(action === 'report');
       else if (action === 'diary') window.diary?.openDiaryModal(0);
       else {
+        document.body.classList.remove('analysis-view');
         document.getElementById('scan-workspace')?.scrollIntoView({ block:'start', behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
         if (action === 'search') document.getElementById('foodSearchInput')?.focus({ preventScroll:true });
       }
@@ -24,10 +25,28 @@
   const results = document.getElementById('results');
   const placeholder = document.getElementById('results-placeholder');
   if (results && placeholder) {
-    const update = () => { placeholder.hidden = getComputedStyle(results).display !== 'none'; };
+    let wasVisible = false;
+    const update = () => {
+      const visible = results.style.display !== 'none' && results.style.display !== '';
+      placeholder.hidden = visible;
+      if (visible && !wasVisible) {
+        document.body.classList.add('analysis-view');
+        results.scrollIntoView({block:'start',behavior:'instant'});
+      }
+      wasVisible = visible;
+    };
     new MutationObserver(update).observe(results, { attributes:true, attributeFilter:['style','class'] });
     update();
   }
+  document.getElementById('back-to-food')?.addEventListener('click', () => {
+    document.body.classList.remove('analysis-view');
+    document.getElementById('foodSearchInput')?.focus();
+  });
+  document.querySelectorAll('#toggleCamera,#barcodeScanBtn,#fileInput,#barcodeFileInput').forEach(control => {
+    control.addEventListener(control.tagName === 'INPUT' ? 'change' : 'click', () => {
+      document.querySelector('.photo-options').open = true;
+    });
+  });
   // File upload remains keyboard accessible when the native input is hidden.
   document.querySelectorAll('.input-actions label[for]').forEach(label => {
     label.tabIndex = 0;
