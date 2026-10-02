@@ -1391,8 +1391,8 @@ function createNutritionChart(data) {
 function createFoodProfileChart(data) {
   const canvas = document.getElementById('foodProfileChart');
   if (!canvas) return;
-  window.foodProfileChart?.destroy();
-  window.foodProfileChart = null;
+  if (typeof window.cbFoodProfileChartInstance?.destroy === 'function') window.cbFoodProfileChartInstance.destroy();
+  window.cbFoodProfileChartInstance = null;
   const section = document.getElementById('food-profile-section');
   const score = window.cb.number(data.rating);
   const rawNova = window.cb.number(data.productMeta?.nova);
@@ -1407,7 +1407,7 @@ function createFoodProfileChart(data) {
   canvas.style.display='block'; section.style.display='block';
   const ink = getComputedStyle(document.body).getPropertyValue('--text-primary').trim();
   const color = score === null ? '#888888' : score >= 7 ? '#18743B' : score >= 4 ? '#B17A17' : '#BA2828';
-  window.foodProfileChart = new Chart(canvas.getContext('2d'), {
+  window.cbFoodProfileChartInstance = new Chart(canvas.getContext('2d'), {
     type:'radar',
     data:{labels,datasets:[{label:'Available profile values',data:values,borderColor:color,backgroundColor:color+'20',pointBackgroundColor:color,pointRadius:5,borderWidth:2,spanGaps:false,fill:false}]},
     options:{responsive:true,maintainAspectRatio:false,animation:matchMedia('(prefers-reduced-motion: reduce)').matches ? false : {duration:200},plugins:{legend:{display:false}},scales:{r:{min:0,max:10,ticks:{stepSize:2,color:ink,backdropColor:'transparent'},pointLabels:{color:ink,font:{size:12}},grid:{color:ink+'30'},angleLines:{color:ink+'30'}}}}
