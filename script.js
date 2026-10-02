@@ -1352,6 +1352,7 @@ function displayResults(data) {
   // Create enhanced nutrition charts
   window.cbPresentation?.renderAnalysis(original);
   createNutritionChart(data);
+  createFoodProfileChart(original);
   createMacronutrientChart(data);
   
   // Show the AI assistant section
@@ -1384,6 +1385,32 @@ function createNutritionChart(data) {
     type:'bar',
     data:{ labels:entries.map(([key]) => key[0].toUpperCase()+key.slice(1)), datasets:[{label:'Grams',data:entries.map(([,value])=>value),backgroundColor:['#E854B6','#CBB7FF','#D7FE3F','#CBB7FF'],borderColor:'#171717',borderWidth:2}] },
     options:{ responsive:true, maintainAspectRatio:false, animation:matchMedia('(prefers-reduced-motion: reduce)').matches ? false : {duration:200}, plugins:{legend:{display:false}}, scales:{x:{ticks:{color:ink},grid:{display:false}},y:{beginAtZero:true,ticks:{color:ink},title:{display:true,text:'Grams',color:ink}}} }
+  });
+}
+
+function createFoodProfileChart(data) {
+  const canvas = document.getElementById('foodProfileChart');
+  if (!canvas) return;
+  window.foodProfileChart?.destroy();
+  window.foodProfileChart = null;
+  const section = document.getElementById('food-profile-section');
+  const score = window.cb.number(data.rating);
+  const rawNova = window.cb.number(data.productMeta?.nova);
+  const nova = [1,2,3,4].includes(rawNova) ? rawNova : null;
+  const grade = String(data.productMeta?.nutriscore || '').toLowerCase();
+  const nutritionGrade = {a:10,b:7.5,c:5,d:2.5,e:0}[grade] ?? null;
+  const labels = ['App rating', 'Less processing', 'Nutrition grade', 'Safety'];
+  const values = [score === null ? null : Math.min(score,10), nova === null ? null : (4-nova)/3*10, nutritionGrade, null];
+  const note = document.getElementById('food-profile-note');
+  note.textContent = `App rating: ${score === null ? 'unknown' : Math.min(score,10)+'/10'}. Processing: ${nova === null ? 'unknown' : 'NOVA '+nova+' of 4 (higher means more processing)'}. Nutrition grade: ${nutritionGrade === null ? 'unknown' : grade.toUpperCase()}. Safety: not assessed. A label or photo cannot verify food safety. Missing values are not plotted. Processing and grade are rescaled to 0–10 for the chart; higher means less processing or a higher grade.`;
+  if (typeof Chart === 'undefined') { section.style.display='block'; canvas.style.display='none'; return; }
+  canvas.style.display='block'; section.style.display='block';
+  const ink = getComputedStyle(document.body).getPropertyValue('--text-primary').trim();
+  const color = score === null ? '#888888' : score >= 7 ? '#18743B' : score >= 4 ? '#B17A17' : '#BA2828';
+  window.foodProfileChart = new Chart(canvas.getContext('2d'), {
+    type:'radar',
+    data:{labels,datasets:[{label:'Available profile values',data:values,borderColor:color,backgroundColor:color+'20',pointBackgroundColor:color,pointRadius:5,borderWidth:2,spanGaps:false,fill:false}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:matchMedia('(prefers-reduced-motion: reduce)').matches ? false : {duration:200},plugins:{legend:{display:false}},scales:{r:{min:0,max:10,ticks:{stepSize:2,color:ink,backdropColor:'transparent'},pointLabels:{color:ink,font:{size:12}},grid:{color:ink+'30'},angleLines:{color:ink+'30'}}}}
   });
 }
 
@@ -2102,7 +2129,7 @@ function toggleTheme() {
   }
   window.cb.storage.set('cb_theme', currentTheme);
   themeToggle.setAttribute('aria-label', currentTheme === 'dark' ? 'Use light theme' : 'Use dark theme');
-  if (analysisData) { createNutritionChart(window.cb.safeAnalysis(analysisData)); createMacronutrientChart(window.cb.safeAnalysis(analysisData)); }
+  if (analysisData) { createNutritionChart(window.cb.safeAnalysis(analysisData)); createMacronutrientChart(window.cb.safeAnalysis(analysisData)); createFoodProfileChart(analysisData); }
 }
 
 // Create scan history chart
