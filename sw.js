@@ -1,10 +1,12 @@
 // Service Worker for CalcuBite AI PWA
-const CACHE_NAME = 'calcubite-ai-v9';
+const CACHE_NAME = 'calcubite-ai-v10-ascent';
 const urlsToCache = [
   '/',
   '/index.html',
   '/app.html',
   '/style.css',
+  '/ascent.css',
+  '/workspace.js',
   '/script.js',
   '/auth.js',
   '/off.js',
@@ -77,3 +79,4 @@ self.addEventListener('activate', event => {
     }).then(() => clients.claim())
   );
 });
+

@@ -17,7 +17,7 @@
     <meta name="twitter:image" content="/logo.png">
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#16a34a">
+    <meta name="theme-color" content="#D7FE3F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="CalcuBite">
@@ -236,22 +236,25 @@
             .btn-big { width: 100%; }
         }
     </style>
+    <link rel="stylesheet" href="ascent.css">
 </head>
-<body>
+<body class="ascent-landing">
+    <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
         <div class="container header-inner">
             <div class="logo-wrap">
                 <img src="/6233209994745069536_120.jpg" alt="CalcuBite logo">
-                <strong>Calcu<span>Bite</span> AI</strong>
+                <strong>Calcu<span>Bite</span> <small>AI</small></strong>
             </div>
             <a href="/app.html" class="btn btn-primary btn-sm">Launch App <i class="fa-solid fa-arrow-right"></i></a>
         </div>
     </header>
 
-    <main>
+    <main id="main">
         <!-- Hero -->
         <section class="hero">
-            <div class="container">
+            <div class="container hero-layout">
+                <div class="hero-copy"><p class="eyebrow">YOUR EVERYDAY NUTRITION WORKSPACE</p>
                 <div class="hero-badge"><i class="fa-solid fa-bolt"></i> 100% free · No signup needed</div>
                 <h1>Know what's <em>really</em> in your food</h1>
                 <p class="sub">Scan any barcode, snap a photo of your meal, or just type what you ate. CalcuBite AI breaks down calories, macros and ingredients in seconds — and keeps a smart food diary for you.</p>
@@ -266,19 +269,20 @@
                     <span><i class="fa-solid fa-microphone"></i> Voice search</span>
                 </div>
 
+                </div>
                 <!-- Mock app preview -->
                 <div class="preview" aria-hidden="true">
                     <div class="preview-head">
                         <span class="dot"></span>
-                        <strong>Today · 1,480 / 2,100 kcal</strong>
+                        <strong>YOUR DAY, AT A GLANCE</strong><span class="preview-example">EXAMPLE</span>
                     </div>
-                    <div class="preview-row"><i class="fa-solid fa-barcode"></i> Oats &amp; honey granola <span class="kcal">380 kcal</span></div>
+                    <h2 class="preview-title">A little awareness.<br>Every bite.</h2><div class="preview-row"><i class="fa-solid fa-barcode"></i> Oats &amp; honey granola <span class="kcal">380 kcal</span></div>
                     <div class="preview-row"><i class="fa-solid fa-camera"></i> Dal + 2 chapatis <span class="kcal">520 kcal</span></div>
                     <div class="preview-row"><i class="fa-solid fa-mug-hot"></i> Masala chai <span class="kcal">120 kcal</span></div>
                     <div class="preview-ring">
                         <svg viewBox="0 0 42 42">
-                            <circle cx="21" cy="21" r="15.9" fill="none" stroke="#ece2cd" stroke-width="5"></circle>
-                            <circle cx="21" cy="21" r="15.9" fill="none" stroke="#16a34a" stroke-width="5" stroke-dasharray="70 30" stroke-dashoffset="25"></circle>
+                            <circle cx="21" cy="21" r="15.9" fill="none" stroke="#CBB7FF" stroke-width="5"></circle>
+                            <circle cx="21" cy="21" r="15.9" fill="none" stroke="#171717" stroke-width="5" stroke-dasharray="70 30" stroke-dashoffset="25"></circle>
                             <text x="21" y="21" text-anchor="middle" dominant-baseline="central">70%</text>
                         </svg>
                         <div class="pr-info">
@@ -390,3 +394,4 @@
     </script>
 </body>
 </html>
+
