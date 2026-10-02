@@ -13,7 +13,7 @@ const OFF_FIELDS = 'product_name,generic_name,brands,quantity,serving_size,' +
   'categories,image_front_small_url,countries';
 
 async function offFetchProduct(barcode) {
-  const res = await fetch(`${OFF_BASE}/api/v2/product/${encodeURIComponent(barcode)}.json?fields=${OFF_FIELDS}`);
+  const res = await window.cb.fetchWithTimeout(`${OFF_BASE}/api/v2/product/${encodeURIComponent(barcode)}.json?fields=${OFF_FIELDS}`, { signal:window.cb.signal });
   if (!res.ok) return null;
   const data = await res.json();
   if (data.status !== 1 || !data.product) return null;
@@ -24,7 +24,7 @@ async function offSearchProducts(query) {
   const url = `${OFF_BASE}/cgi/search.pl?search_terms=${encodeURIComponent(query)}` +
     `&search_simple=1&action=process&json=1&page_size=8` +
     `&fields=code,product_name,brands,quantity,nutriscore_grade,nova_group,image_front_small_url,nutriments`;
-  const res = await fetch(url);
+  const res = await window.cb.fetchWithTimeout(url, { signal:window.cb.signal });
   if (!res.ok) return [];
   const data = await res.json();
   return (data.products || []).filter(p => p.product_name);
@@ -285,6 +285,8 @@ function offProductToAnalysis(product, barcode) {
 // Product banner — shows verified-product info above results
 // ------------------------------------------------------------
 function renderProductBanner(meta) {
+  const imageUrl = window.cb.safeURL(meta?.imageUrl);
+  if (meta) meta = window.cb.safeAnalysis(meta);
   let banner = document.getElementById('product-banner');
   const host = document.getElementById('overview-tab');
   if (!host) return;
@@ -297,11 +299,11 @@ function renderProductBanner(meta) {
   }
   const nsClass = meta.nutriscore ? 'ns-' + meta.nutriscore.toLowerCase() : '';
   banner.innerHTML = `
-    ${meta.imageUrl ? `<img src="${meta.imageUrl}" alt="" class="product-banner-img">` : '<div class="product-banner-img product-banner-placeholder"><i class="fas fa-box"></i></div>'}
+    ${imageUrl ? `<img src="${imageUrl}" alt="" class="product-banner-img">` : '<div class="product-banner-img product-banner-placeholder"><i class="fas fa-box"></i></div>'}
     <div class="product-banner-info">
       <div class="product-banner-name">${meta.name}${meta.brand ? ` <span class="product-banner-brand">· ${meta.brand}</span>` : ''}</div>
       <div class="product-banner-badges">
-        <span class="badge badge-verified"><i class="fas fa-check-circle"></i> Verified data — Open Food Facts</span>
+        <span class="badge badge-verified">${meta.source === 'off' ? 'Open Food Facts · community data · per 100 g' : 'AI estimate · check the portion and label'}</span>
         ${meta.nutriscore ? `<span class="badge badge-nutri ${nsClass}">Nutri-Score ${meta.nutriscore}</span>` : ''}
         ${meta.nova ? `<span class="badge badge-nova">NOVA ${meta.nova}</span>` : ''}
         ${meta.barcode ? `<span class="badge badge-barcode"><i class="fas fa-barcode"></i> ${meta.barcode}</span>` : ''}
@@ -321,17 +323,8 @@ function showAnalysis(analysis, mode = 'food') {
 
   analysisData = analysis; // script.js global
   window.lastProductMeta = analysis.productMeta || null;
-  renderProductBanner(analysis.productMeta || null);
   displayResults(analysis);
   if (window.diary) window.diary.updateAddButton();
-  // Log to scan history like a normal scan
-  try {
-    logScan(mode, {
-      product_name: analysis.productMeta ? analysis.productMeta.name : (analysis.foodIdentification?.mainItems?.[0] || 'AI analysis'),
-      rating: analysis.rating,
-      source: analysis.productMeta ? 'off' : 'ai'
-    });
-  } catch (e) { /* non-critical */ }
 }
 
 // ------------------------------------------------------------
@@ -352,9 +345,7 @@ async function startBarcodeScan() {
   // Make sure the camera preview is visible & running
   cameraContainer.style.display = 'block';
   if (!isCameraOn) {
-    await initCamera();
-    isCameraOn = true;
-    toggleCameraBtn.innerHTML = '<i class="fas fa-camera-slash"></i><span>Turn Off Camera</span>';
+    if (!await initCamera()) return;
   }
   if (!stream) return; // camera permission denied — initCamera showed the message
 
@@ -366,8 +357,8 @@ async function startBarcodeScan() {
 
   barcodeReader = new ZXing.BrowserMultiFormatReader();
   try {
-    barcodeControls = await barcodeReader.decodeFromVideoDevice(
-      null, video, (result, err) => {
+    barcodeControls = await barcodeReader.decodeFromStream(
+      stream, video, (result, err) => {
         if (result) {
           const code = result.getText();
           stopBarcodeScan();
@@ -394,6 +385,9 @@ function stopBarcodeScan() {
 }
 
 async function handleBarcode(code) {
+  if (!/^\d{8,14}$/.test(code)) { window.cbToast?.('Use a valid product barcode.'); return; }
+  const task = window.cb.beginTask('Looking up product database…');
+  if (!task) return;
   if (navigator.vibrate) navigator.vibrate(80);
   loadingDiv.style.display = 'block';
   loadingDiv.querySelector('p').textContent = 'Looking up product database...';
@@ -409,10 +403,11 @@ async function handleBarcode(code) {
     showAnalysis(offProductToAnalysis(product, code), 'food');
     if (window.cbToast) window.cbToast('Product found ✓');
   } catch (e) {
+    if (e.name === 'AbortError') return;
     loadingDiv.style.display = 'none';
     errorDiv.style.display = 'block';
     errorDiv.textContent = 'Product lookup failed: ' + e.message;
-  }
+  } finally { window.cb.finishTask(task); }
 }
 
 // Decode a barcode from an uploaded image
@@ -435,6 +430,9 @@ async function decodeBarcodeFromImage(file) {
 async function handleFoodSearch(query) {
   query = (query || '').trim();
   if (!query) return;
+  const task = window.cb.beginTask('Searching food database…');
+  if (!task) return;
+  try {
   const input = document.getElementById('foodSearchInput');
   if (input) input.blur();
 
@@ -443,7 +441,7 @@ async function handleFoodSearch(query) {
   errorDiv.style.display = 'none';
 
   let candidates = [];
-  try { candidates = await offSearchProducts(query); } catch (e) { /* fall through to AI */ }
+  try { candidates = await offSearchProducts(query); } catch (e) { if (e.name === 'AbortError') throw e; }
 
   if (candidates.length > 0) {
     loadingDiv.style.display = 'none';
@@ -454,14 +452,18 @@ async function handleFoodSearch(query) {
   // No database match → AI estimate from the description
   loadingDiv.querySelector('p').textContent = 'No database match — asking AI to estimate...';
   try {
-    const analysis = await aiTextAnalysis(query);
+    const analysis = await aiTextAnalysis(query, task.controller.signal);
     loadingDiv.style.display = 'none';
     showAnalysis(analysis, 'food');
   } catch (e) {
+    if (e.name === 'AbortError') return;
     loadingDiv.style.display = 'none';
     errorDiv.style.display = 'block';
     errorDiv.textContent = e.message || 'Search failed. Please try again.';
   }
+  } catch (e) {
+    if (e.name !== 'AbortError') { errorDiv.style.display='block'; errorDiv.textContent=e.message; }
+  } finally { window.cb.finishTask(task); }
 }
 
 function showProductPicker(candidates, query) {
@@ -490,27 +492,32 @@ function showProductPicker(candidates, query) {
   const fallbackBtn = modal.querySelector('#picker-ai-fallback');
   fallbackBtn.textContent = `Analyze "${query}" with AI instead`;
   fallbackBtn.onclick = async () => {
+    const task = window.cb.beginTask('Estimating nutrition…');
+    if (!task) return;
     modal.style.display = 'none';
     loadingDiv.style.display = 'block';
     loadingDiv.querySelector('p').textContent = 'Asking AI to estimate nutrition...';
     try {
-      const analysis = await aiTextAnalysis(query);
+      const analysis = await aiTextAnalysis(query, task.controller.signal);
       loadingDiv.style.display = 'none';
       showAnalysis(analysis, 'food');
     } catch (e) {
+      if (e.name === 'AbortError') return;
       loadingDiv.style.display = 'none';
       errorDiv.style.display = 'block';
       errorDiv.textContent = e.message || 'AI analysis failed.';
-    }
+    } finally { window.cb.finishTask(task); }
   };
 
   const list = modal.querySelector('#picker-list');
   list.innerHTML = candidates.map((p, i) => {
+    const image = window.cb.safeURL(p.image_front_small_url);
+    p = window.cb.safeAnalysis(p);
     const kcal = p.nutriments && p.nutriments['energy-kcal_100g'] != null ? p.nutriments['energy-kcal_100g'] : '?';
     const ns = (p.nutriscore_grade || '').toUpperCase();
     return `
       <button class="picker-item" data-idx="${i}">
-        ${p.image_front_small_url ? `<img src="${p.image_front_small_url}" alt="" loading="lazy">` : '<div class="picker-noimg"><i class="fas fa-box"></i></div>'}
+        ${image ? `<img src="${image}" alt="" loading="lazy">` : '<div class="picker-noimg"><i class="fas fa-box"></i></div>'}
         <div class="picker-item-info">
           <div class="picker-item-name">${p.product_name}</div>
           <div class="picker-item-meta">${p.brands || 'Unknown brand'}${p.quantity ? ' · ' + p.quantity : ''} · ${kcal} kcal/100g</div>
@@ -520,6 +527,8 @@ function showProductPicker(candidates, query) {
   }).join('');
   list.querySelectorAll('.picker-item').forEach(el => {
     el.addEventListener('click', async () => {
+      const task = window.cb.beginTask('Loading product data…');
+      if (!task) return;
       const p = candidates[parseInt(el.dataset.idx, 10)];
       modal.style.display = 'none';
       loadingDiv.style.display = 'block';
@@ -529,17 +538,18 @@ function showProductPicker(candidates, query) {
         loadingDiv.style.display = 'none';
         showAnalysis(offProductToAnalysis(full, p.code), 'food');
       } catch (e) {
+        if (e.name === 'AbortError') return;
         loadingDiv.style.display = 'none';
         errorDiv.style.display = 'block';
         errorDiv.textContent = 'Could not load product: ' + e.message;
-      }
+      } finally { window.cb.finishTask(task); }
     });
   });
   modal.style.display = 'block';
 }
 
 // AI nutrition estimate from a text description (no image)
-async function aiTextAnalysis(query) {
+async function aiTextAnalysis(query, signal) {
   const healthProfile = window.auth.getHealth ? window.auth.getHealth() : {};
   const healthFacts = buildHealthSummary(healthProfile);
   const goalContext = healthFacts.length
@@ -573,11 +583,11 @@ Assume typical serving sizes unless specified. Respond ONLY with valid JSON in e
   const raw = await aiChat([
     { role: 'system', content: 'You are a precise nutrition analyst. Always respond with valid JSON only — no markdown, no code fences.' },
     { role: 'user', content: prompt }
-  ], { temperature: 0.3 });
+  ], { temperature: 0.3, signal });
 
   const cleaned = raw.replace(/```json|```/g, '').trim();
   let parsed;
-  try { parsed = JSON.parse(cleaned); }
+  try { parsed = window.cb.parseAnalysis(cleaned); }
   catch (e) { throw new Error('The AI returned an unreadable answer. Please try again.'); }
   parsed.productMeta = {
     source: 'ai-text',
@@ -645,6 +655,8 @@ document.addEventListener('DOMContentLoaded', () => {
     barcodeUpload.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
+      if (!file.type.startsWith('image/') || file.size > 15 * 1024 * 1024) { window.cbToast?.('Choose an image smaller than 15 MB.'); barcodeUpload.value=''; return; }
+      if (window.cb.signal) return;
       loadingDiv.style.display = 'block';
       loadingDiv.querySelector('p').textContent = 'Looking for a barcode in the image...';
       const found = await decodeBarcodeFromImage(file);

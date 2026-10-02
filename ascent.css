@@ -228,3 +228,44 @@ h1,h2,h3 { font-weight:900; letter-spacing:-.04em; }
 .mode-button:hover:not(.active),.tab-button:hover:not(.active) { background:var(--ascent-lavender); color:#171717; }
 #scan-workspace { scroll-margin-top:90px; }
 @media(max-width:720px) { #scan-workspace { scroll-margin-top:145px; } }
+
+/* Put food entry first and keep controls readable. */
+.dialog-open { overflow:hidden; }
+.workspace-banner { padding:12px 16px; box-shadow:none; }
+.workspace-heading { padding:20px 0 16px; }
+.workspace-heading h2 { font-size:clamp(30px,3vw,42px); }
+.workspace-stamp,.rail-note,.scan-frame { display:none; }
+.rail-bottom { margin-top:auto; }
+.scan-prompt { padding:20px 12px; }
+.scan-prompt h3 { font-size:26px; }
+.primary-button,.secondary-button,.action-button,.mode-button,.tab-button,.icon-btn,.close-modal,.theme-toggle,.meal-chip,.today-diary-btn { min-height:44px; min-width:44px; }
+.mode-button,.tab-button,.food-search-bar input { font-size:14px; }
+.food-search-bar input { min-width:0; }
+.today-meal,.macro-mini,.today-meals { font-size:12px; }
+.today-macros label,.macro-mini-label { font-size:12px; }
+.results-panel p,.input-panel p,.modal-body p { line-height:1.65; }
+.results-section small,.product-banner-badges,.picker-item-meta { font-size:12px; }
+.badge { white-space:normal; }
+.product-banner-name,.picker-item-name,.scan-item-name { overflow-wrap:anywhere; }
+@media(max-width:720px) {
+  .workspace-rail { padding:8px 14px; }
+  .rail-brand { margin:0; }
+  .rail-nav { position:fixed; inset:auto 0 0; padding:6px 8px calc(6px + env(safe-area-inset-bottom)); background:var(--ascent-lime); border-top:2px solid #171717; z-index:200; }
+  .rail-item { font-size:10px; min-height:52px; }
+  .ascent-app .page-wrapper { padding-bottom:85px; }
+  #scan-workspace { scroll-margin-top:60px; }
+  .workspace-banner { display:none; }
+  .workspace-heading { padding-top:0; }
+  .workspace-heading h2 { font-size:32px; }
+  .today-strip { margin:16px 0; }
+  .today-meals { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .today-meal { font-size:12px; }
+  .food-search-bar { display:grid; grid-template-columns:minmax(0,1fr) 44px; }
+  #foodSearchBtn { grid-column:1/-1; }
+  .input-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .input-actions>* { min-width:0; margin:0; font-size:12px; padding:10px 6px; }
+  .mode-button { font-size:12px; padding:8px 4px; }
+  .tabs { overflow-x:auto; }
+  .modal-content { max-height:calc(100dvh - 40px); overflow:auto; }
+  .onb-card { max-width:calc(100vw - 28px); }
+}

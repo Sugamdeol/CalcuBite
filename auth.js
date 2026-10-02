@@ -23,7 +23,7 @@ let appContainer, userProfileElem, userNameElem, userAvatarElem, userTierElem;
 // MantleDB helpers
 // ------------------------------------------------------------
 async function mantleFetch(path, options = {}) {
-  const res = await fetch(`${MANTLE_BASE}/${path}`, {
+  const res = await window.cb.fetchWithTimeout(`${MANTLE_BASE}/${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -85,17 +85,29 @@ function persistProfileCloud() {
 // ------------------------------------------------------------
 // Cloud-backed data store (scan history + health goals)
 // ------------------------------------------------------------
-let scanHistory = [];
-let healthGoals = [];
+function loadLocalList(key) {
+  try { const list = JSON.parse(window.cb.storage.get(key)); return Array.isArray(list) ? list : []; }
+  catch (_) { return []; }
+}
+let scanHistory = loadLocalList('cb_history');
+let healthGoals = loadLocalList('cb_goals');
 
 async function loadUserData() {
   try {
     const h = await mantleRead(`users/${deviceId}/history`);
-    if (h && Array.isArray(h.scans)) scanHistory = h.scans;
+    if (h && Array.isArray(h.scans)) {
+      const ids = new Set(scanHistory.map(s => s.id));
+      scanHistory = [...scanHistory, ...h.scans.filter(s => !ids.has(s.id))]
+        .sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).slice(0,50);
+      window.cb.storage.set('cb_history', JSON.stringify(scanHistory));
+    }
   } catch (e) { /* no history yet */ }
   try {
     const g = await mantleRead(`users/${deviceId}/goals`);
-    if (g && Array.isArray(g.goals)) healthGoals = g.goals;
+    if (g && Array.isArray(g.goals) && window.cb.storage.get('cb_goals') === null) {
+      healthGoals = g.goals;
+      window.cb.storage.set('cb_goals', JSON.stringify(healthGoals));
+    }
   } catch (e) { /* no goals yet */ }
   // Food diary: merge cloud copy into local (union by entry id)
   try {
@@ -104,9 +116,11 @@ async function loadUserData() {
       let local = { days: {} };
       try { local = JSON.parse(localStorage.getItem('cb_diary')) || local; } catch (e) { /* reset */ }
       if (!local.days) local.days = {};
+      local.deleted = [...new Set([...(local.deleted || []), ...(d.deleted || [])])];
+      const deleted = new Set(local.deleted);
       let changed = false;
       Object.keys(d.days).forEach(dateKey => {
-        const cloudEntries = (d.days[dateKey] && d.days[dateKey].entries) || [];
+        const cloudEntries = ((d.days[dateKey] && d.days[dateKey].entries) || []).filter(e => !deleted.has(e.id));
         if (!local.days[dateKey]) {
           if (cloudEntries.length) { local.days[dateKey] = { entries: cloudEntries }; changed = true; }
           return;
@@ -115,6 +129,11 @@ async function loadUserData() {
         cloudEntries.forEach(e => {
           if (!have.has(e.id)) { local.days[dateKey].entries.push(e); changed = true; }
         });
+      });
+      Object.values(local.days).forEach(day => {
+        const before = day.entries.length;
+        day.entries = day.entries.filter(e => !deleted.has(e.id));
+        if (before !== day.entries.length) changed = true;
       });
       if (changed) {
         localStorage.setItem('cb_diary', JSON.stringify(local));
@@ -126,11 +145,13 @@ async function loadUserData() {
 
 function persistHistory() {
   const slim = scanHistory.slice(0, 50);
+  window.cb.storage.set('cb_history', JSON.stringify(slim));
   mantleWrite(`users/${deviceId}/history`, { scans: slim, updated_at: new Date().toISOString() })
     .catch((e) => console.warn('History sync failed:', e.message));
 }
 
 function persistGoals() {
+  window.cb.storage.set('cb_goals', JSON.stringify(healthGoals));
   mantleWrite(`users/${deviceId}/goals`, { goals: healthGoals, updated_at: new Date().toISOString() })
     .catch((e) => console.warn('Goals sync failed:', e.message));
 }
@@ -245,6 +266,7 @@ async function updateProfile(profileData) {
   saveProfileLocal();
   persistProfileCloud();
   updateUIForUser();
+  window.dispatchEvent(new Event('cb-profile-updated'));
   return true;
 }
 

@@ -80,16 +80,19 @@ async function aiChat(messages, opts = {}) {
   const body = toGeminiRequest(messages, opts);
   let lastErr;
   for (let attempt = 0; attempt < 2; attempt++) {
+    if (opts.signal?.aborted) throw new DOMException('Cancelled','AbortError');
     if (attempt > 0) await sleepMs(4000);
     let res;
     try {
-      res = await fetch(AI_PROXY_URL, {
+      res = await window.cb.fetchWithTimeout(AI_PROXY_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body })
-      });
+        body: JSON.stringify({ body }),
+        signal: opts.signal
+      }, 55000);
     } catch (netErr) {
-      lastErr = netErr; // network failure -> retry
+      if (netErr.name === 'AbortError') throw netErr;
+      lastErr = netErr;
       continue;
     }
     if (res.status === 429 || res.status === 503) {
@@ -259,6 +262,7 @@ tabButtons.forEach(button => {
 // Camera initialization
 async function initCamera() {
   try {
+    if (!navigator.mediaDevices?.getUserMedia) throw new Error('Camera access is unavailable. Upload a photo instead.');
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: 'environment',
@@ -273,7 +277,14 @@ async function initCamera() {
     errorDiv.style.display = 'none';
     video.style.display = 'block';
     canvas.style.display = 'none';
+    isCameraOn = true;
+    toggleCameraBtn.innerHTML = '<i class="fas fa-camera-slash"></i><span>Turn Off Camera</span>';
+    return true;
   } catch (err) {
+    isCameraOn = false;
+    stream = null;
+    toggleCameraBtn.innerHTML = '<i class="fas fa-camera"></i><span>Turn On Camera</span>';
+    captureBtn.style.display = 'none';
     if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
       cameraPermissionDiv.style.display = 'block';
       errorDiv.style.display = 'block';
@@ -283,6 +294,7 @@ async function initCamera() {
       errorDiv.textContent = 'Error accessing camera: ' + err.message;
     }
     video.style.display = 'none';
+    return false;
   }
 }
 
@@ -291,9 +303,8 @@ toggleCameraBtn.addEventListener('click', async () => {
   if (!isCameraOn) {
     cameraContainer.style.display = 'block';
     await initCamera();
-    isCameraOn = true;
-    toggleCameraBtn.innerHTML = '<i class="fas fa-camera-slash"></i><span>Turn Off Camera</span>';
   } else {
+    if (typeof stopBarcodeScan === 'function') stopBarcodeScan();
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
     }
@@ -318,6 +329,7 @@ requestPermissionBtn.addEventListener('click', async () => {
 captureBtn.addEventListener('click', async () => {
   const width = video.videoWidth;
   const height = video.videoHeight;
+  if (!width || !height) { window.cbToast?.('Wait for the camera preview before taking a photo.'); return; }
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext('2d');
@@ -333,6 +345,7 @@ captureBtn.addEventListener('click', async () => {
     loadingDiv.style.display = 'block';
     await analyzeImage(base64Image);
   } catch (err) {
+    if (err.name === 'AbortError') return;
     errorDiv.style.display = 'block';
     errorDiv.textContent = 'Error processing image: ' + err.message;
     loadingDiv.style.display = 'none';
@@ -341,6 +354,7 @@ captureBtn.addEventListener('click', async () => {
 
 // Retake photo
 retakeBtn.addEventListener('click', () => {
+  if (!isCameraOn) { cameraContainer.style.display = 'none'; canvas.style.display = 'none'; return; }
   video.style.display = 'block';
   canvas.style.display = 'none';
   captureBtn.style.display = 'block';
@@ -354,8 +368,12 @@ retakeBtn.addEventListener('click', () => {
 fileInput.addEventListener('change', async e => {
   const file = e.target.files[0];
   if (file) {
+    if (!/^image\//.test(file.type) || file.size > 15 * 1024 * 1024) {
+      errorDiv.style.display = 'block'; errorDiv.textContent = 'Choose an image smaller than 15 MB.'; fileInput.value = ''; return;
+    }
     const reader = new FileReader();
     reader.onload = async event => {
+      if (typeof stopBarcodeScan === 'function') stopBarcodeScan();
       if (isCameraOn) {
         // Stop camera if it's on
         if (stream) {
@@ -371,10 +389,12 @@ fileInput.addEventListener('change', async e => {
       
       const img = new Image();
       img.onload = async () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
+        const scale = Math.min(1,1400/Math.max(img.width,img.height));
+        canvas.width = Math.round(img.width*scale);
+        canvas.height = Math.round(img.height*scale);
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
+        ctx.drawImage(img, 0, 0,canvas.width,canvas.height);
+        captureBtn.style.display = 'none'; retakeBtn.style.display = 'block';
         
         try {
           const imageData = canvas.toDataURL('image/jpeg');
@@ -387,9 +407,12 @@ fileInput.addEventListener('change', async e => {
           loadingDiv.style.display = 'none';
         }
       };
+      img.onerror = () => { errorDiv.style.display = 'block'; errorDiv.textContent = 'This photo could not be opened. Try a JPG or PNG image.'; };
       img.src = event.target.result;
     };
+    reader.onerror = () => { errorDiv.style.display = 'block'; errorDiv.textContent = 'The file could not be read. Please select it again.'; };
     reader.readAsDataURL(file);
+    fileInput.value = '';
   }
 });
 
@@ -401,9 +424,11 @@ async function logScan(scanType, scanData) {
     window.store.addScan({
       scan_type: scanType,
       scan_data: {
-        rating: scanData.rating || 5,
+        rating: scanData.rating ?? null,
         timestamp: new Date().toISOString(),
-        items: scanData.items || []
+        items: scanData.items || [],
+        product_name: scanData.product_name || '',
+        source: scanData.source || 'ai'
       }
     });
     window.store.trackStat('scans');
@@ -414,6 +439,9 @@ async function logScan(scanType, scanData) {
 
 // Analyze image with AI
 async function analyzeImage(base64Image) {
+  const task = window.cb.beginTask('Analyzing your photo...');
+  if (!task) return;
+  try {
   let systemPrompt;
   
   let goalContext = '';
@@ -690,8 +718,9 @@ Your response MUST be valid JSON with this structure:
           }
         ]
       }
-    ]);
+    ], { signal:task.controller.signal });
   } catch (err) {
+    if (err.name === 'AbortError') throw err;
     throw new Error('AI service error: ' + (err.message || err));
   }
 
@@ -706,7 +735,7 @@ Your response MUST be valid JSON with this structure:
     if (data && data.content) {
       // Try parsing as JSON if content is a string
       if (typeof data.content === 'string') {
-        analysisData = JSON.parse(data.content);
+        analysisData = window.cb.parseAnalysis(data.content);
       } else if (typeof data.content === 'object') {
         // If content is already an object
         analysisData = data.content;
@@ -723,7 +752,7 @@ Your response MUST be valid JSON with this structure:
   }
   
   // Store actual analysis data rating from API response
-  const actualRating = data.rating;
+  if (task.controller.signal.aborted) return;
 
   // Display the results
   displayResults(analysisData);
@@ -734,19 +763,13 @@ Your response MUST be valid JSON with this structure:
   if (typeof renderProductBanner === 'function') renderProductBanner(analysisData.productMeta || null);
   if (window.diary) window.diary.updateAddButton();
   
-  // Log the scan to the database if authenticated
-  if (window.auth.currentUser()) {
-    logScan(currentMode, {
-      rating: actualRating || 5,
-      timestamp: new Date().toISOString(),
-      items: analysisData?.foodIdentification?.mainItems || []
-    });
-  }
-  
+  } finally { window.cb.finishTask(task); }
 }
 
 // Display results function - updated to handle gym mode
 function displayResults(data) {
+  const original = data;
+  data = window.cb.safeAnalysis(data);
   loadingDiv.style.display = 'none';
   resultsDiv.style.display = 'block';
   errorDiv.style.display = 'none';
@@ -768,10 +791,10 @@ function displayResults(data) {
         <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
           <i class="fas fa-${ratingIcon}" style="color: ${ratingColor};"></i>
           <span style="font-weight: 600; color: ${ratingColor};">
-            ${rating >= 7 ? 'Good Choice' : (rating >= 4 ? 'Use with Caution' : 'Not Recommended')}
+            ${rating === 'N/A' ? 'Score unavailable' : rating >= 7 ? 'Higher app score' : (rating >= 4 ? 'Middle app score' : 'Lower app score')}
           </span>
         </div>
-        <p>${data.ratingExplanation || ''}</p>
+        <p>${data.ratingExplanation || 'No explanation was provided.'}</p><small>App estimate, not a medical assessment.</small>
       </div>
     </div>
   `;
@@ -781,9 +804,9 @@ function displayResults(data) {
   const nutrition = data.nutritionEstimate || {};
   
   if (currentMode === 'label') {
-    let sugarPercent = nutrition.dailyValuePercentages?.sugar || Math.floor(Math.random() * 100);
-    let sodiumPercent = nutrition.dailyValuePercentages?.sodium || Math.floor(Math.random() * 100);
-    let fatPercent = nutrition.dailyValuePercentages?.fat || Math.floor(Math.random() * 100);
+    const sugarPercent = window.cb.number(nutrition.dailyValuePercentages?.sugar);
+    const sodiumPercent = window.cb.number(nutrition.dailyValuePercentages?.sodium);
+    const fatPercent = window.cb.number(nutrition.dailyValuePercentages?.fat);
     
     nutritionBreakdownEl.innerHTML = `
       <div class="nutrition-item">
@@ -794,21 +817,21 @@ function displayResults(data) {
         <small>Sugar</small>
         <div class="nutrition-value">${nutrition.sugar || 'N/A'}</div>
         <div class="progress-bar">
-          <div class="progress" style="width: ${sugarPercent}%; 
+          <div class="progress" style="width: ${Math.min(100,sugarPercent || 0)}%; 
             background-color: ${sugarPercent > 70 ? 'var(--danger)' : sugarPercent > 30 ? 'var(--warning)' : 'var(--success)'}">
           </div>
         </div>
-        <small>${sugarPercent}% of daily value</small>
+        <small>${sugarPercent === null ? 'Daily value not provided' : sugarPercent + '% of daily value'}</small>
       </div>
       <div class="nutrition-item">
         <small>Sodium</small>
         <div class="nutrition-value">${nutrition.sodium || 'N/A'}</div>
         <div class="progress-bar">
-          <div class="progress" style="width: ${sodiumPercent}%; 
+          <div class="progress" style="width: ${Math.min(100,sodiumPercent || 0)}%; 
             background-color: ${sodiumPercent > 70 ? 'var(--danger)' : sodiumPercent > 30 ? 'var(--warning)' : 'var(--success)'}">
           </div>
         </div>
-        <small>${sodiumPercent}% of daily value</small>
+        <small>${sodiumPercent === null ? 'Daily value not provided' : sodiumPercent + '% of daily value'}</small>
       </div>
       <div class="nutrition-item">
         <small>Artificial Content</small>
@@ -825,11 +848,11 @@ function displayResults(data) {
         <small>Trans Fat</small>
         <div class="nutrition-value">${nutrition.transFat}</div>
         <div class="progress-bar">
-          <div class="progress" style="width: ${fatPercent}%; 
+          <div class="progress" style="width: ${Math.min(100, fatPercent || 0)}%; 
             background-color: ${fatPercent > 70 ? 'var(--danger)' : fatPercent > 30 ? 'var(--warning)' : 'var(--success)'}">
           </div>
         </div>
-        <small>${fatPercent}% of daily value</small>
+        <small>${fatPercent === null ? 'Daily value not provided' : fatPercent + '% of daily value'}</small>
       </div>
       ` : ''}
     `;
@@ -1334,108 +1357,30 @@ function displayResults(data) {
   // Log the scan to the database if authenticated
   if (window.auth.currentUser()) {
     logScan(currentMode, {
-      rating: data.rating || 5,
+      rating: original.rating ?? null,
       timestamp: new Date().toISOString(),
-      items: data?.foodIdentification?.mainItems || []
+      items: original?.foodIdentification?.mainItems || [],
+      product_name: original.productMeta?.name || '',
+      source: original.productMeta?.source || 'ai'
     });
   }
 }
 
-// Create a more advanced nutrition radar chart
 function createNutritionChart(data) {
   const chartEl = document.getElementById('nutritionChart');
-  
   if (!chartEl) return;
-  
-  const ctx = chartEl.getContext('2d');
-  
-  // Destroy previous chart instance if it exists
-  if (chartInstance) {
-    chartInstance.destroy();
-  }
-  
-  const rating = data.rating || 5;
-  
-  // Generate more meaningful chart data based on actual results
-  let nutritionalValue = rating;
-  let safety = rating * 0.8 + 2;
-  let naturalIngredients = currentMode === 'label' ? 
-    (data.ingredients?.safe?.length || 0) / ((data.ingredients?.safe?.length || 0) + (data.ingredients?.concerning?.length || 0)) * 10 : 
-    rating * 0.9;
-  let processingLevel = 10 - (currentMode === 'label' ? 
-    (data.ingredients?.concerning?.filter(i => i.risk === 'high').length || 0) * 2 : 
-    Math.abs(rating - 10));
-  let additiveContent = 10 - (currentMode === 'label' ?
-    (data.ingredients?.concerning?.length || 0) * 1.5 :
-    Math.abs(rating - 10));
-  
-  // Ensure values are within 0-10 range
-  [nutritionalValue, safety, naturalIngredients, processingLevel, additiveContent] = 
-    [nutritionalValue, safety, naturalIngredients, processingLevel, additiveContent].map(v => 
-      Math.max(0, Math.min(10, v)));
-      
-  chartInstance = new Chart(ctx, {
-    type: 'radar',
-    data: {
-      labels: ['Nutritional Value', 'Safety', 'Natural Ingredients', 'Processing Level', 'Additive Content'],
-      datasets: [{
-        label: 'Product Score',
-        data: [
-          nutritionalValue, 
-          safety,
-          naturalIngredients,
-          processingLevel,
-          additiveContent
-        ],
-        backgroundColor: 'rgba(79, 70, 229, 0.2)',
-        borderColor: 'rgba(79, 70, 229, 0.7)',
-        pointBackgroundColor: 'rgba(79, 70, 229, 1)',
-        pointBorderColor: '#fff',
-        pointHoverBackgroundColor: '#fff',
-        pointHoverBorderColor: 'rgba(79, 70, 229, 1)'
-      }]
-    },
-    options: {
-      scales: {
-        r: {
-          angleLines: {
-            display: true,
-            color: 'rgba(0, 0, 0, 0.1)'
-          },
-          suggestedMin: 0,
-          suggestedMax: 10,
-          ticks: {
-            stepSize: 2,
-            callback: function(value) {
-              if (value === 0) return 'Poor';
-              if (value === 10) return 'Excellent';
-              return value;
-            }
-          },
-          pointLabels: {
-            font: {
-              size: 12
-            }
-          }
-        }
-      },
-      plugins: {
-        legend: {
-          display: false
-        },
-        tooltip: {
-          callbacks: {
-            label: function(context) {
-              let value = context.raw;
-              let rating = value >= 7 ? 'Good' : value >= 4 ? 'Average' : 'Poor';
-              return `${context.label}: ${value.toFixed(1)} - ${rating}`;
-            }
-          }
-        }
-      },
-      responsive: true,
-      maintainAspectRatio: false
-    }
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+  const section = chartEl.closest('.results-section');
+  const nutrition = data.nutritionEstimate || {};
+  const entries = ['protein','carbs','fat','fiber'].map(key => [key, window.cb.number(nutrition[key])]).filter(([,value]) => value !== null);
+  if (typeof Chart === 'undefined' || !entries.length) { section.style.display='none'; return; }
+  section.style.display='block';
+  section.querySelector('h3').textContent = data.productMeta?.source === 'off' ? 'Nutrients per 100 g' : 'Estimated nutrients per serving';
+  const ink = getComputedStyle(document.body).getPropertyValue('--text-primary').trim();
+  chartInstance = new Chart(chartEl.getContext('2d'), {
+    type:'bar',
+    data:{ labels:entries.map(([key]) => key[0].toUpperCase()+key.slice(1)), datasets:[{label:'Grams',data:entries.map(([,value])=>value),backgroundColor:['#E854B6','#CBB7FF','#D7FE3F','#CBB7FF'],borderColor:'#171717',borderWidth:2}] },
+    options:{ responsive:true, maintainAspectRatio:false, animation:matchMedia('(prefers-reduced-motion: reduce)').matches ? false : {duration:200}, plugins:{legend:{display:false}}, scales:{x:{ticks:{color:ink},grid:{display:false}},y:{beginAtZero:true,ticks:{color:ink},title:{display:true,text:'Grams',color:ink}}} }
   });
 }
 
@@ -1443,7 +1388,7 @@ function createNutritionChart(data) {
 function createMacronutrientChart(data) {
   const macroChartEl = document.getElementById('macronutrientChart');
   
-  if (!macroChartEl || currentMode !== 'food') return;
+  if (!macroChartEl || !['food','gym'].includes(currentMode) || typeof Chart === 'undefined') return;
   
   const ctx = macroChartEl.getContext('2d');
   
@@ -1452,7 +1397,13 @@ function createMacronutrientChart(data) {
     window.macroChart.destroy();
   }
   
-  const macroRatio = data.nutritionEstimate?.macroRatio || { protein: 25, carbs: 50, fat: 25 };
+  const nutrition = data.nutritionEstimate || {};
+  const grams = ['protein','carbs','fat'].map(key => window.cb.number(nutrition[key]));
+  if (grams.some(value => value === null) || !grams.some(value => value > 0)) { macroSection.style.display='none'; return; }
+  const calories = grams.map((value,i) => value * (i === 2 ? 9 : 4));
+  const total = calories.reduce((a,b)=>a+b,0);
+  const macroRatio = {protein:Math.round(calories[0]/total*100),carbs:Math.round(calories[1]/total*100),fat:Math.round(calories[2]/total*100)};
+  macroSection.style.display='block';
   
   window.macroChart = new Chart(ctx, {
     type: 'doughnut',
@@ -1461,14 +1412,10 @@ function createMacronutrientChart(data) {
       datasets: [{
         data: [macroRatio.protein, macroRatio.carbs, macroRatio.fat],
         backgroundColor: [
-          'rgba(79, 70, 229, 0.8)',  
-          'rgba(14, 165, 233, 0.8)', 
-          'rgba(245, 158, 11, 0.8)'  
+          '#E854B6', '#CBB7FF', '#D7FE3F'
         ],
         borderColor: [
-          'rgba(79, 70, 229, 1)',
-          'rgba(14, 165, 233, 1)',
-          'rgba(245, 158, 11, 1)'
+          '#171717', '#171717', '#171717'
         ],
         borderWidth: 1
       }]
@@ -1478,7 +1425,7 @@ function createMacronutrientChart(data) {
       maintainAspectRatio: false,
       plugins: {
         legend: {
-          position: 'bottom'
+          position: 'bottom', labels:{color:getComputedStyle(document.body).getPropertyValue('--text-primary').trim()}
         },
         tooltip: {
           callbacks: {
@@ -1499,12 +1446,15 @@ async function submitAIQuestion() {
   
   const question = questionInput.value.trim();
   if (!question) return;
+  const send = document.getElementById('ai-submit-button');
+  if (send.disabled) return;
+  send.disabled = true;
   
   // Add user message to chat
   chatContainer.innerHTML += `
     <div class="chat-message user-message">
       <div class="chat-bubble">
-        <p>${question}</p>
+        <p>${window.cb.escapeHTML(question)}</p>
       </div>
       <div class="chat-avatar">
         <i class="fas fa-user"></i>
@@ -1601,7 +1551,7 @@ If the user asks about something not related to nutrition or health, politely re
           <i class="fas fa-robot"></i>
         </div>
         <div class="chat-bubble">
-          <p>${aiResponse.replace(/\n/g, '<br>')}</p>
+          <p>${renderAdviceText(aiResponse)}</p>
         </div>
       </div>
     `;
@@ -1627,7 +1577,7 @@ If the user asks about something not related to nutrition or health, politely re
           <i class="fas fa-robot"></i>
         </div>
         <div class="chat-bubble error-bubble">
-          <p>Sorry, I encountered an error: ${error.message}. Please try again.</p>
+          <p>${window.cb.escapeHTML(error.message)} Please try again.</p>
         </div>
       </div>
     `;
@@ -1636,7 +1586,7 @@ If the user asks about something not related to nutrition or health, politely re
     
     // Scroll to bottom
     chatContainer.scrollTop = chatContainer.scrollHeight;
-  }
+  } finally { send.disabled=false; questionInput.focus(); }
 }
 
 // Show dashboard functionality
@@ -1767,6 +1717,7 @@ function showDashboard() {
       
       // Create chart
       createScanHistoryChart();
+      if (window.diary) window.diary.enhanceDashboard(dashboardModal);
     }).catch(error => {
       console.error('Error showing dashboard:', error);
       alert('Error loading dashboard data. Please try again.');
@@ -1838,8 +1789,8 @@ function updateDashboardUI() {
   const noScansPlaceholder = document.getElementById('no-scans-placeholder');
 
   if (recentScansList) {
-    if (userDashboardData.scans.length > 0 && noScansPlaceholder) {
-      noScansPlaceholder.style.display = 'none';
+    if (userDashboardData.scans.length > 0) {
+      if (noScansPlaceholder) noScansPlaceholder.style.display = 'none';
       
       // Clear existing list
       recentScansList.innerHTML = '';
@@ -1883,9 +1834,9 @@ function updateDashboardUI() {
           <div class="scan-details">
             <h4>${scanType}</h4>
             <p class="scan-date">${scanDate}</p>
-            <p class="scan-item-name">${foodItems}</p>
+            <p class="scan-item-name">${window.cb.escapeHTML(foodItems)}</p>
           </div>
-          <div class="scan-rating">${scanRating}</div>
+          <div class="scan-rating">${window.cb.escapeHTML(scanRating ?? 'N/A')}</div>
         `;
         
         recentScansList.appendChild(scanItem);
@@ -1900,14 +1851,16 @@ function updateDashboardUI() {
   const noGoalsPlaceholder = document.getElementById('no-goals-placeholder');
   
   if (goalsContainer) {
-    if (userDashboardData.goals.length > 0 && noGoalsPlaceholder) {
-      noGoalsPlaceholder.style.display = 'none';
+    if (userDashboardData.goals.length > 0) {
+      if (noGoalsPlaceholder) noGoalsPlaceholder.style.display = 'none';
       
       // Clear existing goals
       goalsContainer.innerHTML = '';
       
       // Add goal cards
-      userDashboardData.goals.forEach(goal => {
+      userDashboardData.goals.forEach(rawGoal => {
+        const goal = window.cb.safeAnalysis(rawGoal);
+        goal.progress = Math.min(100, window.cb.number(rawGoal.progress) || 0);
         const goalCard = document.createElement('div');
         goalCard.className = 'goal-card';
         goalCard.id = `goal-${goal.id}`;
@@ -2143,6 +2096,9 @@ function toggleTheme() {
     themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
     currentTheme = 'light';
   }
+  window.cb.storage.set('cb_theme', currentTheme);
+  themeToggle.setAttribute('aria-label', currentTheme === 'dark' ? 'Use light theme' : 'Use dark theme');
+  if (analysisData) { createNutritionChart(window.cb.safeAnalysis(analysisData)); createMacronutrientChart(window.cb.safeAnalysis(analysisData)); }
 }
 
 // Create scan history chart
@@ -2414,14 +2370,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   
-  // Dashboard link
-  const dashboardLink = document.getElementById('dashboard-link');
-  if (dashboardLink) {
-    dashboardLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      showDashboard();
-    });
-  }
 });
 
 // Register service worker for PWA

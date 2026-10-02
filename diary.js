@@ -6,7 +6,7 @@
 // ============================================================
 
 (function () {
-  const DIARY_KEY = '***';
+  const DIARY_KEY = 'cb_diary';
   const MEALS = ['breakfast', 'lunch', 'dinner', 'snacks'];
   const MEAL_LABELS = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snacks: 'Snacks' };
   const MEAL_ICONS = { breakfast: 'fa-sun', lunch: 'fa-utensils', dinner: 'fa-moon', snacks: 'fa-cookie-bite' };
@@ -14,8 +14,11 @@
   // ---------------- storage ----------------
   function loadDiary() {
     try {
-      const d = JSON.parse(localStorage.getItem(DIARY_KEY));
-      if (d && typeof d === 'object' && d.days) return d;
+      const d = JSON.parse(window.cb.storage.get(DIARY_KEY));
+      if (d && typeof d === 'object' && d.days && typeof d.days === 'object') {
+        Object.values(d.days).forEach(day => { if (!Array.isArray(day.entries)) day.entries = []; });
+        return d;
+      }
     } catch (e) { /* corrupted */ }
     return { days: {} };
   }
@@ -25,7 +28,7 @@
     // keep last 60 days only
     const keys = Object.keys(diary.days).sort();
     while (keys.length > 60) { delete diary.days[keys.shift()]; }
-    localStorage.setItem(DIARY_KEY, JSON.stringify(diary));
+    if (!window.cb.storage.set(DIARY_KEY, JSON.stringify(diary))) window.cbToast?.('Device storage is unavailable. Keep this tab open to retain your diary.');
     // cloud sync (fire-and-forget; auth.js exposes MantleDB via window.store internals)
     try {
       if (window._mantleSyncDiary) window._mantleSyncDiary(diary);
@@ -33,9 +36,7 @@
   }
 
   function todayKey(offsetDays = 0) {
-    const d = new Date();
-    d.setDate(d.getDate() + offsetDays);
-    return d.toISOString().slice(0, 10);
+    return window.cb.localDate(offsetDays);
   }
 
   function getDay(dateStr) {
@@ -99,10 +100,10 @@
       time: new Date().toISOString(),
       meal: MEALS.includes(entry.meal) ? entry.meal : guessMeal(),
       name: entry.name || 'Food item',
-      calories: Math.round(entry.calories || 0),
-      protein: Math.round((entry.protein || 0) * 10) / 10,
-      carbs: Math.round((entry.carbs || 0) * 10) / 10,
-      fat: Math.round((entry.fat || 0) * 10) / 10,
+      calories: Math.round(window.cb.number(entry.calories) || 0),
+      protein: Math.round((window.cb.number(entry.protein) || 0) * 10) / 10,
+      carbs: Math.round((window.cb.number(entry.carbs) || 0) * 10) / 10,
+      fat: Math.round((window.cb.number(entry.fat) || 0) * 10) / 10,
       serving: entry.serving || '',
       source: entry.source || 'manual'
     });
@@ -115,6 +116,7 @@
     const day = diary.days[dateStr];
     if (!day) return;
     day.entries = day.entries.filter(e => e.id !== id);
+    diary.deleted = [...new Set([...(diary.deleted || []), id])];
     saveDiary();
     renderTodayStrip();
   }
@@ -163,12 +165,7 @@
     return { name, calories, protein, carbs, fat, serving, source: meta.source || 'ai' };
   }
 
-  function parseNum(v) {
-    if (v === null || v === undefined) return 0;
-    if (typeof v === 'number') return v;
-    const m = String(v).match(/([\d.,]+)/);
-    return m ? parseFloat(m[1].replace(',', '.')) || 0 : 0;
-  }
+  function parseNum(v) { return window.cb.number(v) || 0; }
 
   // ---------------- "Add to Diary" flow ----------------
   function openMealPicker() {
@@ -215,11 +212,14 @@
       });
       modal.querySelector('#meal-confirm').addEventListener('click', () => {
         const name = modal.querySelector('#meal-food-name').value.trim();
-        const calories = parseFloat(modal.querySelector('#meal-calories').value) || 0;
+        const field = modal.querySelector('#meal-calories');
+        if (!field.reportValidity() || field.value.trim() === '') return;
+        const calories = Number(field.value);
         const sel = modal.querySelector('.meal-chip.selected');
         const meal = sel ? sel.dataset.meal : guessMeal();
         const e = modal._pendingEntry;
-        addEntry({ ...e, name: name || e.name, calories, meal });
+        const scale = e.calories > 0 ? calories / e.calories : 1;
+        addEntry({ ...e, name: name || e.name, calories, meal, protein:e.protein*scale, carbs:e.carbs*scale, fat:e.fat*scale });
         modal.style.display = 'none';
         if (window.cbToast) window.cbToast(`Added to ${MEAL_LABELS[meal]} ✓`);
       });
@@ -253,9 +253,9 @@
     const pct = Math.min(100, Math.round(t.calories / targets.calories * 100));
     const over = t.calories > targets.calories;
 
-    const ring = (val, goal, color) => {
+    const ring = (label, val, goal, color) => {
       const p = goal > 0 ? Math.min(100, val / goal * 100) : 0;
-      return `<div class="macro-mini">
+      return `<div class="macro-mini"><strong>${label}</strong>
         <div class="macro-mini-bar"><div style="width:${p}%;background:${color}"></div></div>
         <span>${Math.round(val)}/${goal}g</span>
       </div>`;
@@ -277,9 +277,9 @@
           </div>
         </div>
         <div class="today-macros">
-          ${ring(t.protein, targets.protein, 'var(--primary)')}
-          ${ring(t.carbs, targets.carbs, 'var(--secondary)')}
-          ${ring(t.fat, targets.fat, 'var(--warning)')}
+          ${ring('Protein', t.protein, targets.protein, 'var(--ascent-magenta)')}
+          ${ring('Carbs', t.carbs, targets.carbs, 'var(--ascent-lavender)')}
+          ${ring('Fat', t.fat, targets.fat, 'var(--ascent-lime)')}
           ${targets.basedOnProfile ? '' : '<small class="today-hint"><i class="fas fa-info-circle"></i> Add height/weight/age in Profile for personal targets</small>'}
         </div>
         <div class="today-meals">
@@ -287,13 +287,13 @@
             <div class="today-meal ${t.byMeal[m] > 0 ? 'has-food' : ''}">
               <i class="fas ${MEAL_ICONS[m]}"></i>
               <span>${MEAL_LABELS[m]}</span>
-              <strong>${t.byMeal[m] > 0 ? Math.round(t.byMeal[m]) + ' kcal' : '—'}</strong>
+              <strong>${t.byMeal[m] > 0 ? Math.round(t.byMeal[m]) + ' kcal' : 'Not logged'}</strong>
             </div>`).join('')}
         </div>
         <button class="secondary-button today-diary-btn" id="openDiaryBtn"><i class="fas fa-book-open"></i> Diary</button>
       </div>`;
     const openBtn = host.querySelector('#openDiaryBtn');
-    if (openBtn) openBtn.addEventListener('click', openDiaryModal);
+    if (openBtn) openBtn.addEventListener('click', () => openDiaryModal(0));
   }
 
   // ---------------- Full diary modal ----------------
@@ -325,7 +325,7 @@
       modal.querySelector('#diary-prev').addEventListener('click', () => { modal._offset = (modal._offset || 0) - 1; renderDiaryModal(); });
       modal.querySelector('#diary-next').addEventListener('click', () => { if ((modal._offset || 0) < 0) { modal._offset++; renderDiaryModal(); } });
     }
-    modal._offset = dateOffset;
+    modal._offset = Number.isFinite(dateOffset) ? Math.min(0, dateOffset) : 0;
     renderDiaryModal();
     modal.style.display = 'block';
   }
@@ -383,7 +383,8 @@
 
   // ---------------- Dashboard section ----------------
   function enhanceDashboard(dashboardModal) {
-    if (!dashboardModal || dashboardModal.querySelector('.diary-dashboard-section')) return;
+    if (!dashboardModal) return;
+    if (dashboardModal.querySelector('.diary-dashboard-section')) { renderWeekChart(dashboardModal); return; }
     const section = document.createElement('div');
     section.className = 'dashboard-section diary-dashboard-section';
     section.innerHTML = `

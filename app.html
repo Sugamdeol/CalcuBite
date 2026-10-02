@@ -168,7 +168,8 @@
                             
                             <div class="alert error" id="error"></div>
                             
-                            <div class="loading" id="loading">
+                            <div class="loading" id="loading" role="status" aria-live="polite">
+                                <button id="cancel-analysis" class="secondary-button" type="button">Cancel analysis</button>
                                 <div class="spinner"></div>
                                 <p>Analyzing with advanced AI...</p>
                             </div>
@@ -426,6 +427,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="core.js"></script>
     <script src="auth.js"></script>
     <script src="script.js"></script>
     <script src="vendor/zxing.min.js" defer></script>
