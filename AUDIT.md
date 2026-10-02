@@ -46,4 +46,11 @@ Reviewed the landing page, app shell, camera/upload flows, barcode and text sear
 
 ## Delivery gate
 
+### Modern analysis and report iteration
+
+- Twelve automated tests pass, including macro shares from supplied grams, analysis basis labels, missing-day weekly averages, and escaping structured/fallback AI reports.
+- Live Open Food Facts lookup for Quaker Oats rendered the prominent energy tile, labeled macro values, source badge and per-100 g basis.
+- A live weekly report generated structured summary, observations and three next steps from a fictional one-entry diary. The sparse fixture exposed an inappropriate comparison with a daily target; the report prompt now explicitly treats logged days as potentially incomplete and prohibits inferring a deficit from partial logs.
+- Report loading, empty and provider-format fallback states remain available. Shared result cards use the same Ascent palette.
+
 Functional and regression checks pass for the verified flows. Core UI is responsive and keyboard dialogs have been exercised. Real-device features and anonymous cloud security are explicit remaining gates, not silently marked complete.
