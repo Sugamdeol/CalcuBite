@@ -32,7 +32,8 @@ Reviewed the landing page, app shell, camera/upload flows, barcode and text sear
 - JavaScript syntax checks passed for modified application files and the proxy.
 - Live preview: daily diary opens; previous-day navigation works; Escape closes and restores focus; dashboard and nested goal editor open; a fictional goal survives reload.
 - Live preview: food search for oats returned an AI analysis; one history record was created. Changing the meal to 200 kcal scaled macros and saved the breakfast entry shown in the diary.
-- Actual app inspected in 320/390/768 px iframe viewports. No horizontal overflow at 320 and 390. A 768 px meal-grid overflow was found and corrected; final recheck is recorded in PR validation.
+- Actual app inspected in 320/390/768 px iframe viewports. No horizontal overflow at 320 and 390. A 768 px meal-grid overflow was found, corrected and rechecked with equal content/viewport width.
+- Live analysis cancellation restores enabled controls with a cancellation message; dark theme renders correctly after its transition and survives reload.
 
 ## Remaining limits and follow-up
 
