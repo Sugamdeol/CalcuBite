@@ -42,6 +42,10 @@
     document.body.classList.remove('analysis-view');
     document.getElementById('foodSearchInput')?.focus();
   });
+  window.addEventListener('cb-analysis-ready', () => {
+    document.body.classList.add('analysis-view');
+    results?.scrollIntoView({block:'start',behavior:'instant'});
+  });
   document.querySelectorAll('#toggleCamera,#barcodeScanBtn,#fileInput,#barcodeFileInput').forEach(control => {
     control.addEventListener(control.tagName === 'INPUT' ? 'change' : 'click', () => {
       document.querySelector('.photo-options').open = true;

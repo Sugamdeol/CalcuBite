@@ -236,7 +236,8 @@
 .ascent-app .input-panel .panel-header h2 { font-size:24px; }
 .ascent-app .analysis-mode-toggle { width:auto; gap:6px; padding:5px; }
 .ascent-app .mode-button { padding:12px 18px; font-size:12px; }
-.ascent-app .food-search-bar { margin:0; gap:12px; }
+.ascent-app .food-search-bar { margin:0; gap:12px; display:grid; grid-template-columns:minmax(0,1fr) 44px; }
+.ascent-app .food-search-bar .primary-button { grid-column:1/-1; }
 .food-entry-label { grid-column:1/-1; font-size:14px; font-weight:600; margin-bottom:2px; }
 .ascent-app .food-search-bar input { min-height:60px; padding:16px; font-size:16px; }
 .ascent-app #foodSearchBtn { min-height:52px; font-size:14px; margin-top:8px; }

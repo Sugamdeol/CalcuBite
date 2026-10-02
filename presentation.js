@@ -33,6 +33,7 @@
     }
     document.getElementById('results')?.classList.add('modern-results');
     document.querySelector('.content-grid')?.classList.add('has-analysis');
+    root.dispatchEvent?.(new Event('cb-analysis-ready'));
   }
   function weekSummary(days, targets) {
     const logged=days.filter(day=>day.totals.count>0);
