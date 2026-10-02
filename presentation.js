@@ -18,7 +18,9 @@
     const host=document.getElementById('healthScore'), nutritionHost=document.getElementById('nutritionBreakdown');
     if(!host||!nutritionHost) return;
     const nutrition=data.nutritionEstimate||{}, rating=cb.number(data.rating);
-    host.innerHTML=`<div class="analysis-intro"><div><h3>Food overview</h3><p>${esc(data.ratingExplanation||'Review the nutrition and portion below before adding this food to your diary.')}</p></div><div class="analysis-score"><span>App score</span><strong>${rating===null?'N/A':Math.min(10,rating)}${rating===null?'':'<small>/10</small>'}</strong><span>Estimated, not medical advice</span></div></div>`;
+    const tone=rating===null?'unknown':rating>=7?'good':rating>=4?'middle':'low';
+    const label=rating===null?'Score unavailable':rating>=7?'Higher app score':rating>=4?'Middle app score':'Lower app score';
+    host.innerHTML=`<div class="analysis-intro"><div><h3>Food overview</h3><p>${esc(data.ratingExplanation||'Review the nutrition and portion below before adding this food to your diary.')}</p></div><div class="analysis-score score-${tone}"><span>App score</span><strong>${rating===null?'N/A':Math.min(10,rating)}${rating===null?'':'<small>/10</small>'}</strong><span class="score-label">${label}</span><span>Estimated, not medical advice</span></div></div>`;
     const calories=cb.number(nutrition.calories);
     const shares=macroShares(nutrition);
     nutritionHost.classList.add('modern-nutrition');
@@ -33,7 +35,6 @@
     }
     document.getElementById('results')?.classList.add('modern-results');
     document.querySelector('.content-grid')?.classList.add('has-analysis');
-    root.dispatchEvent?.(new Event('cb-analysis-ready'));
   }
   function weekSummary(days, targets) {
     const logged=days.filter(day=>day.totals.count>0);

@@ -219,67 +219,11 @@
 }
 @media(prefers-reduced-motion:reduce) { .ascent-app * { transition:none!important; animation:none!important; } }
 
-/* One task at a time: entry and results have their own breathing room. */
-.ascent-app .container { max-width:1200px; padding-inline:48px; }
-.ascent-app .main-content { padding-top:56px; }
-.ascent-app .workspace-heading { margin-bottom:36px; align-items:center; }
-.ascent-app .workspace-heading h2 { font-size:clamp(32px,4vw,48px); }
-.ascent-app .content-grid,.ascent-app .content-grid.has-analysis { display:block; max-width:760px; margin:48px auto 80px; }
-.ascent-app .input-panel { border:0; background:transparent; }
-.ascent-app .input-panel .panel-content { padding:0; display:flex; flex-direction:column; }
-.ascent-app .input-panel .panel-header { order:0; }
-.ascent-app .input-panel .food-search-bar { order:1; }
-.ascent-app .input-panel .photo-options { order:2; margin-top:32px; }
-.ascent-app .input-panel .camera-container { order:3; }
-.ascent-app .input-panel .alert,.ascent-app .input-panel .loading { order:4; }
-.ascent-app .input-panel .panel-header { border:0; display:flex; flex-direction:column; align-items:flex-start; padding:0; gap:24px; margin-bottom:32px; }
-.ascent-app .input-panel .panel-header h2 { font-size:24px; }
-.ascent-app .analysis-mode-toggle { width:auto; gap:6px; padding:5px; }
-.ascent-app .mode-button { padding:12px 18px; font-size:12px; }
-.ascent-app .food-search-bar { margin:0; gap:12px; display:grid; grid-template-columns:minmax(0,1fr) 44px; }
-.ascent-app .food-search-bar .primary-button { grid-column:1/-1; }
-.food-entry-label { grid-column:1/-1; font-size:14px; font-weight:600; margin-bottom:2px; }
-.ascent-app .food-search-bar input { min-height:60px; padding:16px; font-size:16px; }
-.ascent-app #foodSearchBtn { min-height:52px; font-size:14px; margin-top:8px; }
-.ascent-app .scan-prompt,.ascent-app #results-placeholder { display:none!important; }
-.photo-options { margin-bottom:32px; border-bottom:1px solid var(--ui-line); padding-bottom:24px; }
-.photo-options summary,.daily-progress summary { cursor:pointer; font-size:14px; font-weight:600; padding:12px 0; }
-.photo-options summary span,.daily-progress summary span { font-size:12px; font-weight:400; color:var(--text-secondary); margin-left:12px; }
-.photo-options .input-actions { margin-top:20px; grid-template-columns:repeat(2,minmax(0,1fr)); }
-.daily-progress { border-block:1px solid var(--ui-line); }
-.daily-progress .today-strip { margin-top:16px; }
-.ascent-app:not(.analysis-view) #results { display:none!important; }
-.analysis-view #scan-workspace,.analysis-view .workspace-heading,.analysis-view .daily-progress { display:none; }
-.ascent-app.analysis-view .content-grid { max-width:920px; margin-top:0; }
-.ascent-app.analysis-view .results-panel { border:0; background:transparent; }
-.ascent-app.analysis-view .results-panel>.panel-content { padding:0; }
-.ascent-app.analysis-view .results-panel .panel-header { display:flex; flex-wrap:wrap; flex-direction:row; align-items:center; gap:24px; padding-bottom:28px; margin-bottom:32px; }
-.analysis-view .results-actions { margin-left:auto; }
-.ascent-app .results-section { margin-bottom:48px; }
-.ascent-app .product-banner { padding-bottom:32px; }
-.analysis-intro { padding-top:28px; gap:40px; }
-.analysis-intro p { font-size:14px; }
-.modern-nutrition { gap:28px!important; }
-.energy-tile { padding:32px; }
-.macro-row { padding:22px 0; }
-.nutrition-details { gap:20px 32px; padding-block:16px; }
-.ascent-app .weekly-report-out { margin-top:40px; }
-.report-columns { margin-block:40px; gap:40px; }
-.report-summary { padding:32px; }
-.report-next { padding-top:32px; }
-@media(max-width:720px) {
-  .ascent-app .container { padding-inline:22px; }
-  .ascent-app .main-content { padding-top:32px; }
-  .ascent-app .workspace-heading { margin-bottom:24px; gap:20px; }
-  .ascent-app .content-grid { margin:32px auto 48px; }
-  .ascent-app .mode-button { padding:10px 9px; font-size:11px; }
-  .ascent-app .analysis-mode-toggle { width:100%; }
-  .photo-options summary span,.daily-progress summary span { display:block; margin:8px 0 0 18px; }
-  .ascent-app.analysis-view .results-panel .panel-header { gap:16px; }
-  .analysis-view .results-actions { width:100%; margin:0; }
-  .analysis-intro { gap:20px; }
-  .modern-nutrition { gap:20px!important; }
-  .energy-tile { padding:24px 18px; }
-  .report-summary { padding:24px; }
-  .report-columns { gap:28px; }
-}
+/* Rating has a text label as well as colour. */
+.analysis-score.score-good strong,.analysis-score.score-good .score-label { color:#18743B; }
+.analysis-score.score-middle strong,.analysis-score.score-middle .score-label { color:#8A5800; }
+.analysis-score.score-low strong,.analysis-score.score-low .score-label { color:#BA2828; }
+.dark-theme .analysis-score.score-good strong,.dark-theme .analysis-score.score-good .score-label { color:#80DB9E; }
+.dark-theme .analysis-score.score-middle strong,.dark-theme .analysis-score.score-middle .score-label { color:#F4CA72; }
+.dark-theme .analysis-score.score-low strong,.dark-theme .analysis-score.score-low .score-label { color:#FF9292; }
+.analysis-score .score-label { font-size:10px; font-weight:650; line-height:1.5; }

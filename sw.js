@@ -1,4 +1,4 @@
-const CACHE = 'calcubite-v13-focus';
+const CACHE = 'calcubite-v14-ratings';
 const ASSETS = ['/','/index.html','/app.html','/style.css','/ascent.css','/modern.css','/core.js','/presentation.js','/workspace.js','/script.js','/auth.js','/off.js','/diary.js','/onboarding.js','/vendor/zxing.min.js','/manifest.json'];
 self.addEventListener('install', event => {
   self.skipWaiting();
