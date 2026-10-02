@@ -1350,6 +1350,7 @@ function displayResults(data) {
   }
   
   // Create enhanced nutrition charts
+  window.cbPresentation?.renderAnalysis(original);
   createNutritionChart(data);
   createMacronutrientChart(data);
   
@@ -1592,7 +1593,7 @@ If the user asks about something not related to nutrition or health, politely re
 }
 
 // Show dashboard functionality
-function showDashboard() {
+function showDashboard(focusReport = false) {
   try {
     // Create dashboard modal if it doesn't exist
     let dashboardModal = document.getElementById('dashboard-modal');
@@ -1720,6 +1721,7 @@ function showDashboard() {
       // Create chart
       createScanHistoryChart();
       if (window.diary) window.diary.enhanceDashboard(dashboardModal);
+      if (focusReport === true) dashboardModal.querySelector('.diary-dashboard-section')?.scrollIntoView({block:'start',behavior:'instant'});
     }).catch(error => {
       console.error('Error showing dashboard:', error);
       alert('Error loading dashboard data. Please try again.');

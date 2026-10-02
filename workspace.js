@@ -13,7 +13,7 @@
     button.addEventListener('click', () => {
       const action = button.dataset.workspace;
       if (action === 'profile') document.getElementById('profile-link')?.click();
-      else if (action === 'dashboard' && typeof showDashboard === 'function') showDashboard();
+      else if ((action === 'dashboard' || action === 'report') && typeof showDashboard === 'function') showDashboard(action === 'report');
       else if (action === 'diary') window.diary?.openDiaryModal(0);
       else {
         document.getElementById('scan-workspace')?.scrollIntoView({ block:'start', behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });

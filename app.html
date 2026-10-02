@@ -26,6 +26,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="ascent.css">
+    <link rel="stylesheet" href="modern.css">
 </head>
 <body class="ascent-app">
     <a class="skip-link" href="#workspace">Skip to workspace</a>
@@ -84,7 +85,7 @@
                 
                 
                 <section class="workspace-banner" aria-label="Personalize your workspace"><div><strong>Your food. Your goals. Your pace.</strong><p>Add a health profile to make your daily targets personal.</p></div><button class="primary-button" data-workspace="profile">Set up profile <span aria-hidden="true">↗</span></button></section>
-                <section class="workspace-heading"><div><p class="eyebrow" id="workspace-date">YOUR DAILY WORKSPACE</p><h2>MAKE EVERY<br>BITE COUNT.</h2><p>A little awareness, every meal. Start with what's on your plate.</p></div><span class="workspace-stamp" aria-hidden="true">FOOD<br>FOR THOUGHT ↗</span></section>
+                <section class="workspace-heading"><div><p class="eyebrow" id="workspace-date">YOUR DAILY WORKSPACE</p><h2>Your daily nutrition</h2><p>Look up a food. Check your portion. Keep track of your day.</p></div><button class="secondary-button" data-workspace="report"><i class="fas fa-chart-line" aria-hidden="true"></i> Weekly report</button></section>
                 <!-- Today strip: daily calories & macros -->
                 <section class="today-strip" id="today-strip" aria-label="Today's nutrition"></section>
                 
@@ -428,6 +429,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="core.js"></script>
+    <script src="presentation.js"></script>
     <script src="auth.js"></script>
     <script src="script.js"></script>
     <script src="vendor/zxing.min.js" defer></script>

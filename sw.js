@@ -1,5 +1,5 @@
-const CACHE = 'calcubite-v11-audit';
-const ASSETS = ['/','/index.html','/app.html','/style.css','/ascent.css','/core.js','/workspace.js','/script.js','/auth.js','/off.js','/diary.js','/onboarding.js','/vendor/zxing.min.js','/manifest.json'];
+const CACHE = 'calcubite-v12-modern';
+const ASSETS = ['/','/index.html','/app.html','/style.css','/ascent.css','/modern.css','/core.js','/presentation.js','/workspace.js','/script.js','/auth.js','/off.js','/diary.js','/onboarding.js','/vendor/zxing.min.js','/manifest.json'];
 self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(caches.open(CACHE).then(cache => Promise.allSettled(ASSETS.map(path => cache.add(path)))));
