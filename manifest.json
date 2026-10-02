@@ -4,8 +4,8 @@
   "description": "Analyze what's really in your food with AI-powered insights",
   "start_url": "/app.html",
   "display": "standalone",
-  "background_color": "#f9fafb",
-  "theme_color": "#16a34a",
+  "background_color": "#FFF8E8",
+  "theme_color": "#D7FE3F",
   "icons": [
     {
       "src": "/6233209994745069536_120.jpg",
@@ -24,4 +24,3 @@
     }
   ]
 }
-

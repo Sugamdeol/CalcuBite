@@ -17,7 +17,7 @@
     <meta name="twitter:image" content="/logo.png">
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#16a34a">
+    <meta name="theme-color" content="#D7FE3F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="CalcuBite">
@@ -236,49 +236,53 @@
             .btn-big { width: 100%; }
         }
     </style>
+    <link rel="stylesheet" href="ascent.css">
 </head>
-<body>
+<body class="ascent-landing">
+    <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
         <div class="container header-inner">
             <div class="logo-wrap">
                 <img src="/6233209994745069536_120.jpg" alt="CalcuBite logo">
-                <strong>Calcu<span>Bite</span> AI</strong>
+                <strong>Calcu<span>Bite</span> <small>AI</small></strong>
             </div>
             <a href="/app.html" class="btn btn-primary btn-sm">Launch App <i class="fa-solid fa-arrow-right"></i></a>
         </div>
     </header>
 
-    <main>
+    <main id="main">
         <!-- Hero -->
         <section class="hero">
-            <div class="container">
+            <div class="container hero-layout">
+                <div class="hero-copy"><p class="eyebrow">YOUR EVERYDAY NUTRITION WORKSPACE</p>
                 <div class="hero-badge"><i class="fa-solid fa-bolt"></i> 100% free · No signup needed</div>
                 <h1>Know what's <em>really</em> in your food</h1>
-                <p class="sub">Scan any barcode, snap a photo of your meal, or just type what you ate. CalcuBite AI breaks down calories, macros and ingredients in seconds — and keeps a smart food diary for you.</p>
+                <p class="sub">Look up a packaged food, estimate a home-cooked meal, and log the portion you ate. See calories and macros together in a daily food diary.</p>
                 <div class="hero-cta">
                     <a href="/app.html" class="btn btn-primary btn-big"><i class="fa-solid fa-camera"></i> Start scanning — it's free</a>
                     <a href="#features" class="btn btn-secondary btn-big"><i class="fa-solid fa-circle-info"></i> See features</a>
                 </div>
                 <div class="trust-row">
                     <span><i class="fa-solid fa-user-slash"></i> No account required</span>
-                    <span><i class="fa-solid fa-box-open"></i> 3M+ barcode products</span>
-                    <span><i class="fa-solid fa-wifi"></i> Works offline</span>
+                    <span><i class="fa-solid fa-box-open"></i> Open Food Facts lookup</span>
+                    <span><i class="fa-solid fa-wifi"></i> Saved diary available offline</span>
                     <span><i class="fa-solid fa-microphone"></i> Voice search</span>
                 </div>
 
+                </div>
                 <!-- Mock app preview -->
                 <div class="preview" aria-hidden="true">
                     <div class="preview-head">
                         <span class="dot"></span>
-                        <strong>Today · 1,480 / 2,100 kcal</strong>
+                        <strong>YOUR DAY, AT A GLANCE</strong><span class="preview-example">EXAMPLE</span>
                     </div>
-                    <div class="preview-row"><i class="fa-solid fa-barcode"></i> Oats &amp; honey granola <span class="kcal">380 kcal</span></div>
+                    <h2 class="preview-title">A little awareness.<br>Every bite.</h2><div class="preview-row"><i class="fa-solid fa-barcode"></i> Oats &amp; honey granola <span class="kcal">380 kcal</span></div>
                     <div class="preview-row"><i class="fa-solid fa-camera"></i> Dal + 2 chapatis <span class="kcal">520 kcal</span></div>
                     <div class="preview-row"><i class="fa-solid fa-mug-hot"></i> Masala chai <span class="kcal">120 kcal</span></div>
                     <div class="preview-ring">
                         <svg viewBox="0 0 42 42">
-                            <circle cx="21" cy="21" r="15.9" fill="none" stroke="#ece2cd" stroke-width="5"></circle>
-                            <circle cx="21" cy="21" r="15.9" fill="none" stroke="#16a34a" stroke-width="5" stroke-dasharray="70 30" stroke-dashoffset="25"></circle>
+                            <circle cx="21" cy="21" r="15.9" fill="none" stroke="#CBB7FF" stroke-width="5"></circle>
+                            <circle cx="21" cy="21" r="15.9" fill="none" stroke="#171717" stroke-width="5" stroke-dasharray="70 30" stroke-dashoffset="25"></circle>
                             <text x="21" y="21" text-anchor="middle" dominant-baseline="central">70%</text>
                         </svg>
                         <div class="pr-info">
@@ -306,7 +310,7 @@
                     <div class="feature-card">
                         <div class="feature-icon"><i class="fa-solid fa-barcode"></i></div>
                         <h3>Barcode scanner</h3>
-                        <p>Point your camera at any packaged food. We pull verified nutrition data from Open Food Facts — 3 million+ products with Nutri-Score and NOVA ratings.</p>
+                        <p>Look up a packaged food in Open Food Facts. See community-contributed nutrition data and available Nutri-Score or NOVA grades. Compare it with the label on your pack.</p>
                     </div>
                     <div class="feature-card">
                         <div class="feature-icon"><i class="fa-solid fa-magnifying-glass"></i></div>
@@ -321,7 +325,7 @@
                     <div class="feature-card">
                         <div class="feature-icon"><i class="fa-solid fa-bullseye"></i></div>
                         <h3>Smart daily goals</h3>
-                        <p>Tell us your age, weight and activity level once — we compute your personal calorie, protein, carb and fat targets with real science (Mifflin-St Jeor).</p>
+                        <p>Add a profile to estimate calorie and macro targets. Treat them as a starting point and review personal nutrition needs with a qualified professional.</p>
                     </div>
                     <div class="feature-card">
                         <div class="feature-icon"><i class="fa-solid fa-chart-line"></i></div>
@@ -353,7 +357,7 @@
                     <div class="step">
                         <div class="step-num">3</div>
                         <h3>Log &amp; track</h3>
-                        <p>Tap "Add to Diary" and pick the meal. Watch your daily ring fill up, check the weekly chart, and read your AI report every Sunday.</p>
+                        <p>Tap "Add to Diary", check the portion, and pick a meal. Review your daily totals or request a weekly summary from the dashboard.</p>
                     </div>
                 </div>
             </div>
@@ -363,7 +367,7 @@
         <section class="final-cta">
             <div class="container">
                 <h2>Your food has secrets. Let's find them.</h2>
-                <p>Free forever. No account. Install it like a native app.</p>
+                <p>No account required. Start with your next meal.</p>
                 <a href="/app.html" class="btn btn-secondary btn-big"><i class="fa-solid fa-utensils"></i> Open CalcuBite AI</a>
             </div>
         </section>

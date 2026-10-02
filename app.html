@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -16,7 +17,7 @@
     <meta name="twitter:image" content="/logo.png">
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#16a34a">
+    <meta name="theme-color" content="#D7FE3F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="CalcuBite">
@@ -24,8 +25,26 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="ascent.css">
+    <link rel="stylesheet" href="modern.css">
 </head>
-<body>
+<body class="ascent-app">
+    <a class="skip-link" href="#workspace">Skip to workspace</a>
+    <aside class="workspace-rail" aria-label="Workspace navigation">
+        <a class="rail-brand" href="/" aria-label="CalcuBite home"><span class="brand-mark" aria-hidden="true">◒</span> CalcuBite<span class="brand-ai">AI</span></a>
+        <p class="rail-caption">YOUR NUTRITION WORKSPACE</p>
+        <nav class="rail-nav" aria-label="Nutrition tools">
+            <p class="eyebrow rail-section">EXPLORE</p>
+            <button class="rail-item active" data-workspace="scan" aria-current="page"><i class="fas fa-camera" aria-hidden="true"></i> Scan food <span>↗</span></button>
+            <button class="rail-item" data-workspace="search"><i class="fas fa-magnifying-glass" aria-hidden="true"></i> Food search</button>
+            <p class="eyebrow rail-section">YOUR DAY</p>
+            <button class="rail-item" data-workspace="diary"><i class="fas fa-book-open" aria-hidden="true"></i> Food diary</button>
+            <button class="rail-item" data-workspace="dashboard"><i class="fas fa-chart-line" aria-hidden="true"></i> Dashboard</button>
+            <button class="rail-item" data-workspace="profile"><i class="fas fa-sliders" aria-hidden="true"></i> Health profile</button>
+        </nav>
+        <div class="rail-note"><p class="eyebrow">ONE MEAL AT A TIME</p><strong>Small choices.<br>Better days.</strong><p>Get to know what fuels you.</p></div>
+        <div class="rail-bottom"><span class="rail-avatar" aria-hidden="true">CB</span><div><strong>Your workspace</strong><small>FREE · LOCAL FIRST</small></div></div>
+    </aside>
     <!-- Landing Page (for unauthenticated users) -->
         <div class="page-wrapper" id="app-container">
         <!-- Header -->
@@ -61,16 +80,18 @@
         </header>
         
         <!-- Main Content -->
-        <main class="main-content">
+        <main class="main-content" id="workspace">
             <div class="container">
                 
                 
+                <section class="workspace-banner" aria-label="Personalize your workspace"><div><strong>Your food. Your goals. Your pace.</strong><p>Add a health profile to make your daily targets personal.</p></div><button class="primary-button" data-workspace="profile">Set up profile <span aria-hidden="true">↗</span></button></section>
+                <section class="workspace-heading"><div><p class="eyebrow" id="workspace-date">YOUR DAILY WORKSPACE</p><h2>Your daily nutrition</h2><p>Look up a food. Check your portion. Keep track of your day.</p></div><button class="secondary-button" data-workspace="report"><i class="fas fa-chart-line" aria-hidden="true"></i> Weekly report</button></section>
                 <!-- Today strip: daily calories & macros -->
                 <section class="today-strip" id="today-strip" aria-label="Today's nutrition"></section>
                 
                 <div class="content-grid">
                     <!-- Input Panel -->
-                    <section class="input-panel">
+                    <section class="input-panel" id="scan-workspace">
                         <div class="panel-content">
                             <div class="panel-header">
                                 <h2><i class="fas fa-camera"></i> Scan Food</h2>
@@ -117,6 +138,7 @@
                                 <button id="foodSearchBtn" class="primary-button"><i class="fas fa-magnifying-glass"></i> Analyze</button>
                             </div>
                             
+                            <div class="scan-prompt"><div class="scan-frame" aria-hidden="true"><i class="fas fa-utensils"></i><span>+</span></div><p class="eyebrow">01 / SCAN · SNAP · SEARCH</p><h3>What's on your plate?</h3><p>Use your camera, upload a photo, or type your meal above.</p><small>Meal photos give AI estimates. Barcode data comes from Open Food Facts.</small></div>
                             <div class="camera-container">
                                 <div class="flash-option" data-tooltip="Toggle flash">
                                     <i class="fas fa-bolt"></i>
@@ -147,13 +169,15 @@
                             
                             <div class="alert error" id="error"></div>
                             
-                            <div class="loading" id="loading">
+                            <div class="loading" id="loading" role="status" aria-live="polite">
+                                <button id="cancel-analysis" class="secondary-button" type="button">Cancel analysis</button>
                                 <div class="spinner"></div>
                                 <p>Analyzing with advanced AI...</p>
                             </div>
                         </div>
                     </section>
 
+                    <aside class="results-placeholder" id="results-placeholder"><p class="eyebrow">02 / YOUR FOOD, DECODED</p><h2>More than<br>a calorie count.</h2><p>See the whole picture. Calories, macros, ingredients and useful insights, together.</p><div class="empty-metrics"><div><strong>kcal</strong><span>ENERGY</span></div><div><strong>P / C / F</strong><span>YOUR MACROS</span></div></div><div class="empty-result-note"><span aria-hidden="true">↖</span><p><strong>Your next meal starts here.</strong><br>Analyze a food to see its breakdown.</p></div><span class="estimate-label">AI ESTIMATES · VERIFIED BARCODE DATA</span></aside>
                     <!-- Results Panel -->
                     <section class="results-panel" id="results">
                         <div class="panel-content">
@@ -191,6 +215,11 @@
                             <div class="tab-content active" id="overview-tab">
                                 <div class="results-section" id="healthScore">
                                     <!-- Health score will be inserted here -->
+                                </div>
+                                <div class="results-section" id="food-profile-section">
+                                    <h3>Food profile</h3>
+                                    <div class="chart-container"><canvas id="foodProfileChart" aria-label="Web chart of available food profile scores" role="img"></canvas></div>
+                                    <p id="food-profile-note" class="report-note"></p>
                                 </div>
                                 
                                 <div class="results-section">
@@ -290,7 +319,7 @@
             <div class="container">
                 <p>&copy; 2025 CalcuBite AI. Made with <i class="fas fa-heart"></i> by ByteBuildrz</p>
                 <p class="disclaimer">This application uses AI for analysis. Results should be used for informational purposes only.</p>
-                <p>Powered by <a href="https://bazaarlink.ai/free" target="_blank">BazaarLink AI</a></p>
+                <p>AI estimates require an internet connection. Saved diary entries stay on this device.</p>
             </div>
         </footer>
     </div>
@@ -300,7 +329,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2><i class="fas fa-user"></i> User Profile</h2>
-                <span class="close-modal">&times;</span>
+                <button type="button" class="close-modal" aria-label="Close dialog">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="profile-content">
@@ -393,7 +422,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2><i class="fas fa-lightbulb"></i> Personalized Health Advice</h2>
-                <span class="close-modal">&times;</span>
+                <button type="button" class="close-modal" aria-label="Close dialog">&times;</button>
             </div>
             <div class="modal-body">
                 <div id="advice-content" class="advice-content">
@@ -404,11 +433,14 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="core.js"></script>
+    <script src="presentation.js"></script>
     <script src="auth.js"></script>
     <script src="script.js"></script>
     <script src="vendor/zxing.min.js" defer></script>
     <script src="off.js"></script>
     <script src="diary.js"></script>
     <script src="onboarding.js"></script>
+    <script src="workspace.js"></script>
 </body>
 </html>

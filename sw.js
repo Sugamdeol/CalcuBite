@@ -1,79 +1,26 @@
-// Service Worker for CalcuBite AI PWA
-const CACHE_NAME = 'calcubite-ai-v9';
-const urlsToCache = [
-  '/',
-  '/index.html',
-  '/app.html',
-  '/style.css',
-  '/script.js',
-  '/auth.js',
-  '/off.js',
-  '/diary.js',
-  '/onboarding.js',
-  '/vendor/zxing.min.js',
-  '/manifest.json',
-  '/6233209994745069536_120.jpg'
-];
-
-// Install event - cache resources
+const CACHE = 'calcubite-v16-profile-fix';
+const ASSETS = ['/','/index.html','/app.html','/style.css','/ascent.css','/modern.css','/core.js','/presentation.js','/workspace.js','/script.js','/auth.js','/off.js','/diary.js','/onboarding.js','/vendor/zxing.min.js','/manifest.json'];
 self.addEventListener('install', event => {
-  // Activate the new service worker right away instead of waiting for
-  // every tab to close (ensures cache-busting updates propagate fast).
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        return cache.addAll(urlsToCache);
-      })
-  );
+  event.waitUntil(caches.open(CACHE).then(cache => Promise.allSettled(ASSETS.map(path => cache.add(path)))));
 });
-
-// Fetch event - serve from cache if available, else fetch from network
-self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // Return cached response if found
-        if (response) {
-          return response;
-        }
-        
-        // Clone the request for fetch since it can only be consumed once
-        const fetchRequest = event.request.clone();
-        
-        return fetch(fetchRequest).then(response => {
-          // Check if valid response
-          if (!response || response.status !== 200 || response.type !== 'basic') {
-            return response;
-          }
-          
-          // Clone the response for caching since it can only be consumed once
-          const responseToCache = response.clone();
-          
-          caches.open(CACHE_NAME)
-            .then(cache => {
-              cache.put(event.request, responseToCache);
-            });
-          
-          return response;
-        });
-      })
-  );
-});
-
-// Activate event - clean up old caches, then take control of open tabs
 self.addEventListener('activate', event => {
-  const cacheWhitelist = [CACHE_NAME];
-  
-  event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    }).then(() => clients.claim())
-  );
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('calcubite') && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));
+});
+self.addEventListener('fetch', event => {
+  const request=event.request, url=new URL(request.url);
+  if (request.method !== 'GET' || url.origin !== self.location.origin || !ASSETS.includes(url.pathname)) return;
+  event.respondWith((async () => {
+    const cache=await caches.open(CACHE);
+    try {
+      const response=await fetch(request);
+      if (response.ok) await cache.put(request,response.clone());
+      return response;
+    } catch (error) {
+      const stored=await cache.match(request);
+      if (stored) return stored;
+      if (request.mode==='navigate') return (await cache.match('/app.html')) || Response.error();
+      return Response.error();
+    }
+  })());
 });

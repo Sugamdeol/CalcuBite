@@ -11,10 +11,10 @@
       icon: 'fa-wand-magic-sparkles',
       title: 'Welcome to CalcuBite 👋',
       body: `
-        <p>Point your camera at any food and get instant, science-backed answers.</p>
+        <p>Look up a food label, estimate a meal, and keep a diary you can review.</p>
         <ul class="onb-list">
           <li><i class="fas fa-camera"></i> <strong>Snap a label or a meal</strong> — AI reads it in seconds</li>
-          <li><i class="fas fa-barcode"></i> <strong>Scan barcodes</strong> — verified data for 3M+ packaged foods</li>
+          <li><i class="fas fa-barcode"></i> <strong>Scan barcodes</strong> — community nutrition data from Open Food Facts</li>
           <li><i class="fas fa-keyboard"></i> <strong>Type or speak</strong> — "2 chapatis + dal" works too</li>
           <li><i class="fas fa-book-open"></i> <strong>Track your day</strong> — calories &amp; macros against your personal target</li>
         </ul>`

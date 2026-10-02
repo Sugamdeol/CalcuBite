@@ -23,7 +23,7 @@ let appContainer, userProfileElem, userNameElem, userAvatarElem, userTierElem;
 // MantleDB helpers
 // ------------------------------------------------------------
 async function mantleFetch(path, options = {}) {
-  const res = await fetch(`${MANTLE_BASE}/${path}`, {
+  const res = await window.cb.fetchWithTimeout(`${MANTLE_BASE}/${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -43,12 +43,12 @@ const mantleIncrement = (path, key) => mantleFetch(`increment/${path}`, { method
 // Anonymous device identity (replaces Supabase auth)
 // ------------------------------------------------------------
 function getDeviceId() {
-  let id = localStorage.getItem('cb_device_id');
+  let id = window.cb.storage.get('cb_device_id');
   if (!id) {
     id = (window.crypto && crypto.randomUUID)
       ? crypto.randomUUID()
       : 'dev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
-    localStorage.setItem('cb_device_id', id);
+    window.cb.storage.set('cb_device_id', id);
   }
   return id;
 }
@@ -61,7 +61,7 @@ const currentUser = { id: deviceId, email: '' };
 // ------------------------------------------------------------
 function loadProfile() {
   try {
-    const p = JSON.parse(localStorage.getItem('cb_profile'));
+    const p = JSON.parse(window.cb.storage.get('cb_profile'));
     if (p && typeof p === 'object') return p;
   } catch (e) { /* corrupted profile, reset */ }
   return {
@@ -74,7 +74,7 @@ function loadProfile() {
 let userProfile = loadProfile();
 
 function saveProfileLocal() {
-  localStorage.setItem('cb_profile', JSON.stringify(userProfile));
+  window.cb.storage.set('cb_profile', JSON.stringify(userProfile));
 }
 
 function persistProfileCloud() {
@@ -85,28 +85,42 @@ function persistProfileCloud() {
 // ------------------------------------------------------------
 // Cloud-backed data store (scan history + health goals)
 // ------------------------------------------------------------
-let scanHistory = [];
-let healthGoals = [];
+function loadLocalList(key) {
+  try { const list = JSON.parse(window.cb.storage.get(key)); return Array.isArray(list) ? list : []; }
+  catch (_) { return []; }
+}
+let scanHistory = loadLocalList('cb_history');
+let healthGoals = loadLocalList('cb_goals');
 
 async function loadUserData() {
   try {
     const h = await mantleRead(`users/${deviceId}/history`);
-    if (h && Array.isArray(h.scans)) scanHistory = h.scans;
+    if (h && Array.isArray(h.scans)) {
+      const ids = new Set(scanHistory.map(s => s.id));
+      scanHistory = [...scanHistory, ...h.scans.filter(s => !ids.has(s.id))]
+        .sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).slice(0,50);
+      window.cb.storage.set('cb_history', JSON.stringify(scanHistory));
+    }
   } catch (e) { /* no history yet */ }
   try {
     const g = await mantleRead(`users/${deviceId}/goals`);
-    if (g && Array.isArray(g.goals)) healthGoals = g.goals;
+    if (g && Array.isArray(g.goals) && window.cb.storage.get('cb_goals') === null) {
+      healthGoals = g.goals;
+      window.cb.storage.set('cb_goals', JSON.stringify(healthGoals));
+    }
   } catch (e) { /* no goals yet */ }
   // Food diary: merge cloud copy into local (union by entry id)
   try {
     const d = await mantleRead(`users/${deviceId}/diary`);
     if (d && d.days && typeof d.days === 'object') {
       let local = { days: {} };
-      try { local = JSON.parse(localStorage.getItem('cb_diary')) || local; } catch (e) { /* reset */ }
+      try { local = JSON.parse(window.cb.storage.get('cb_diary')) || local; } catch (e) { /* reset */ }
       if (!local.days) local.days = {};
+      local.deleted = [...new Set([...(local.deleted || []), ...(d.deleted || [])])];
+      const deleted = new Set(local.deleted);
       let changed = false;
       Object.keys(d.days).forEach(dateKey => {
-        const cloudEntries = (d.days[dateKey] && d.days[dateKey].entries) || [];
+        const cloudEntries = ((d.days[dateKey] && d.days[dateKey].entries) || []).filter(e => !deleted.has(e.id));
         if (!local.days[dateKey]) {
           if (cloudEntries.length) { local.days[dateKey] = { entries: cloudEntries }; changed = true; }
           return;
@@ -116,8 +130,13 @@ async function loadUserData() {
           if (!have.has(e.id)) { local.days[dateKey].entries.push(e); changed = true; }
         });
       });
+      Object.values(local.days).forEach(day => {
+        const before = day.entries.length;
+        day.entries = day.entries.filter(e => !deleted.has(e.id));
+        if (before !== day.entries.length) changed = true;
+      });
       if (changed) {
-        localStorage.setItem('cb_diary', JSON.stringify(local));
+        window.cb.storage.set('cb_diary', JSON.stringify(local));
         window.dispatchEvent(new CustomEvent('cb-diary-loaded'));
       }
     }
@@ -126,11 +145,13 @@ async function loadUserData() {
 
 function persistHistory() {
   const slim = scanHistory.slice(0, 50);
+  window.cb.storage.set('cb_history', JSON.stringify(slim));
   mantleWrite(`users/${deviceId}/history`, { scans: slim, updated_at: new Date().toISOString() })
     .catch((e) => console.warn('History sync failed:', e.message));
 }
 
 function persistGoals() {
+  window.cb.storage.set('cb_goals', JSON.stringify(healthGoals));
   mantleWrite(`users/${deviceId}/goals`, { goals: healthGoals, updated_at: new Date().toISOString() })
     .catch((e) => console.warn('Goals sync failed:', e.message));
 }
@@ -245,6 +266,7 @@ async function updateProfile(profileData) {
   saveProfileLocal();
   persistProfileCloud();
   updateUIForUser();
+  window.dispatchEvent(new Event('cb-profile-updated'));
   return true;
 }
 
@@ -301,7 +323,7 @@ function populateProfileModal() {
         full_name: newName || userProfile.full_name,
         health
       });
-      alert(success ? 'Profile saved!' : 'Failed to save profile.');
+      window.cbToast?.(success ? 'Profile saved' : 'Failed to save profile.');
     };
   }
 
